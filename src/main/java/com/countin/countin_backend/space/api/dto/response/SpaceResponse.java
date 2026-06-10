@@ -2,6 +2,7 @@ package com.countin.countin_backend.space.api.dto.response;
 
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.Builder;
@@ -9,10 +10,15 @@ import lombok.Getter;
 
 @Getter
 @Builder
+@Schema(description = "Space details returned after creation or lookup")
 public class SpaceResponse {
 
     private UUID id;
+
+    @Schema(example = "Sunrise Apartments")
     private String name;
+
+    @Schema(description = "Space category", example = "RENTAL", implementation = SpaceType.class)
     private SpaceType type;
     private String address;
     private String contactNumber;

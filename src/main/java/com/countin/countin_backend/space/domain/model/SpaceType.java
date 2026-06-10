@@ -1,8 +1,17 @@
 package com.countin.countin_backend.space.domain.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
+@Schema(description = "Category of the space")
 public enum SpaceType {
+    @Schema(description = "Paying Guest accommodation")
     PG,
+    @Schema(description = "Meal-providing canteen or mess")
     MESS,
+    @Schema(description = "Hostel-style accommodation")
     HOSTEL,
-    CO_LIVING
+    @Schema(description = "Co-living or shared accommodation space")
+    CO_LIVING,
+    @Schema(description = "Rental property or apartment")
+    RENTAL
 }
