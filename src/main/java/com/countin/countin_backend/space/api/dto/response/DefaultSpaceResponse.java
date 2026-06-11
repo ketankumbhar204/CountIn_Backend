@@ -1,18 +1,16 @@
 package com.countin.countin_backend.space.api.dto.response;
 
-import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import io.swagger.v3.oas.annotations.media.Schema;
-import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
 @Builder
-@Schema(description = "Space summary for a user membership")
-public class UserSpaceResponse {
+@Schema(description = "The logged-in user's default space")
+public class DefaultSpaceResponse {
 
     private UUID spaceId;
     private String spaceName;
@@ -20,18 +18,11 @@ public class UserSpaceResponse {
     @Schema(description = "Space category", implementation = SpaceType.class)
     private SpaceType spaceType;
 
-    @Schema(description = "Role of the user in this space")
-    private MembershipRole membershipRole;
-
-    private LocalDateTime joinedAt;
-
-    public static UserSpaceResponse from(SpaceMembershipEntity membership) {
-        return UserSpaceResponse.builder()
+    public static DefaultSpaceResponse from(SpaceMembershipEntity membership) {
+        return DefaultSpaceResponse.builder()
                 .spaceId(membership.getSpace().getId())
                 .spaceName(membership.getSpace().getName())
                 .spaceType(membership.getSpace().getType())
-                .membershipRole(membership.getRole())
-                .joinedAt(membership.getJoinedAt())
                 .build();
     }
 }

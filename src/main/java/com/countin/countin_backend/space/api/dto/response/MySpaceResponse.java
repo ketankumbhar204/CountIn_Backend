@@ -11,8 +11,8 @@ import lombok.Getter;
 
 @Getter
 @Builder
-@Schema(description = "Space summary for a user membership")
-public class UserSpaceResponse {
+@Schema(description = "Space entry in the logged-in user's space list")
+public class MySpaceResponse {
 
     private UUID spaceId;
     private String spaceName;
@@ -23,14 +23,18 @@ public class UserSpaceResponse {
     @Schema(description = "Role of the user in this space")
     private MembershipRole membershipRole;
 
+    @Schema(description = "Whether this is the user's default space")
+    private boolean isDefault;
+
     private LocalDateTime joinedAt;
 
-    public static UserSpaceResponse from(SpaceMembershipEntity membership) {
-        return UserSpaceResponse.builder()
+    public static MySpaceResponse from(SpaceMembershipEntity membership) {
+        return MySpaceResponse.builder()
                 .spaceId(membership.getSpace().getId())
                 .spaceName(membership.getSpace().getName())
                 .spaceType(membership.getSpace().getType())
                 .membershipRole(membership.getRole())
+                .isDefault(membership.isDefault())
                 .joinedAt(membership.getJoinedAt())
                 .build();
     }

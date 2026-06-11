@@ -66,4 +66,8 @@ public class SpaceMembershipEntity extends BaseEntity {
 
     @Column(name = "exited_at")
     private LocalDateTime exitedAt;
+
+    @Builder.Default
+    @Column(name = "is_default", nullable = false)
+    private boolean isDefault = false;
 }
