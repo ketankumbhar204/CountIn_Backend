@@ -4,6 +4,7 @@ import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
 import com.countin.countin_backend.member.application.service.MemberMasterService;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
+import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.domain.model.MembershipStatus;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.SpaceMembershipRepository;
@@ -90,7 +91,7 @@ public class SpaceService {
         SpaceEntity entity = spaceRepository.findByIdAndIsActiveTrue(spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Space", "id", spaceId));
 
-        assertOwner(entity, callerId);
+        assertCanManageSpace(entity, callerId);
 
         Space updated = SpaceMapper.applyUpdate(SpaceMapper.toDomain(entity), request);
         SpaceMapper.applyToEntity(entity, updated);
@@ -181,5 +182,17 @@ public class SpaceService {
             throw new BusinessException(
                     "Only the space owner can perform this action", HttpStatus.FORBIDDEN);
         }
+    }
+
+    private void assertCanManageSpace(SpaceEntity space, UUID callerId) {
+        if (space.getOwner().getId().equals(callerId)) {
+            return;
+        }
+        if (spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
+                callerId, space.getId(), List.of(MembershipRole.OWNER, MembershipRole.MANAGER))) {
+            return;
+        }
+        throw new BusinessException(
+                "Only OWNER or MANAGER can perform this action", HttpStatus.FORBIDDEN);
     }
 }

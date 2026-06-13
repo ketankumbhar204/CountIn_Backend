@@ -55,6 +55,7 @@ public class OccupancyService {
     private final OccupancyTargetService occupancyTargetService;
     private final AccommodationStatusSyncService accommodationStatusSyncService;
     private final GenderPolicyValidator genderPolicyValidator;
+    private final OccupancyContractSnapshotService contractSnapshotService;
 
     @Transactional
     public OccupancyResponse reserve(UUID spaceId, UUID callerId, ReserveOccupancyRequest request) {
@@ -98,7 +99,7 @@ public class OccupancyService {
         memberRepository.save(member);
 
         recordHistory(occupancy, OccupancyHistoryEvent.RESERVED, null, targetSnapshot(target), actor, now, request.getRemarks());
-        return OccupancyResponse.from(occupancy);
+        return toResponse(occupancy);
     }
 
     @Transactional
@@ -135,9 +136,12 @@ public class OccupancyService {
         if (body.getRemarks() != null && !body.getRemarks().isBlank()) {
             occupancy.setRemarks(body.getRemarks());
         }
-        occupancy = occupancyRepository.save(occupancy);
 
         OccupancyTargetService.ResolvedTarget target = toResolvedTarget(occupancy);
+        contractSnapshotService.applyActivationSnapshot(
+                occupancy, toContractInput(body), target, occupancy.getSpace(), now);
+        occupancy = occupancyRepository.save(occupancy);
+
         accommodationStatusSyncService.markOccupied(target);
 
         MemberEntity member = occupancy.getMember();
@@ -145,7 +149,7 @@ public class OccupancyService {
         memberRepository.save(member);
 
         recordHistory(occupancy, OccupancyHistoryEvent.MOVE_IN, targetSnapshot(occupancy), targetSnapshot(occupancy), actor, now, body.getRemarks());
-        return OccupancyResponse.from(occupancy);
+        return toResponse(occupancy);
     }
 
     @Transactional
@@ -172,7 +176,7 @@ public class OccupancyService {
         refreshMemberOccupancyStatus(occupancy.getMember(), spaceId);
 
         recordHistory(occupancy, OccupancyHistoryEvent.RESERVATION_CANCELLED, fromTarget, null, actor, now, body.getRemarks());
-        return OccupancyResponse.from(occupancy);
+        return toResponse(occupancy);
     }
 
     @Transactional
@@ -208,12 +212,15 @@ public class OccupancyService {
                 .build();
 
         occupancy = occupancyRepository.save(occupancy);
+        contractSnapshotService.applyActivationSnapshot(
+                occupancy, toContractInput(request), target, space, now);
+        occupancy = occupancyRepository.save(occupancy);
         accommodationStatusSyncService.markOccupied(target);
         member.setOccupancyStatus(MemberOccupancyStatus.ALLOCATED);
         memberRepository.save(member);
 
         recordHistory(occupancy, OccupancyHistoryEvent.ALLOCATED, null, targetSnapshot(target), actor, now, request.getRemarks());
-        return OccupancyResponse.from(occupancy);
+        return toResponse(occupancy);
     }
 
     @Transactional
@@ -260,6 +267,9 @@ public class OccupancyService {
                 .build();
 
         next = occupancyRepository.save(next);
+        contractSnapshotService.applyTransferSnapshot(
+                next, toContractInput(request), request.getRentPolicy(), current, newTarget, space, now);
+        next = occupancyRepository.save(next);
         accommodationStatusSyncService.markOccupied(newTarget);
 
         recordHistory(
@@ -271,7 +281,7 @@ public class OccupancyService {
                 now,
                 request.getRemarks());
 
-        return OccupancyResponse.from(next);
+        return toResponse(next);
     }
 
     @Transactional
@@ -305,7 +315,7 @@ public class OccupancyService {
                 now,
                 request.getRemarks());
 
-        return OccupancyResponse.from(occupancy);
+        return toResponse(occupancy);
     }
 
     @Transactional(readOnly = true)
@@ -315,7 +325,7 @@ public class OccupancyService {
 
         occupancyAccessService.assertCanViewMemberOccupancy(
                 spaceId, occupancy.getMember().getId(), callerId, occupancy.getMember());
-        return OccupancyResponse.from(occupancy);
+        return toResponse(occupancy);
     }
 
     @Transactional(readOnly = true)
@@ -335,7 +345,7 @@ public class OccupancyService {
 
         Page<OccupancyEntity> page = occupancyRepository.search(
                 spaceId, status, memberId, buildingId, floorId, unitId, roomId, bedId, targetType, pageable);
-        return PagedResponse.from(page.map(OccupancyResponse::from));
+        return PagedResponse.from(page.map(this::toResponse));
     }
 
     @Transactional(readOnly = true)
@@ -361,9 +371,9 @@ public class OccupancyService {
                 .findFirst();
 
         return MemberOccupancyListResponse.builder()
-                .currentOccupancy(active.map(OccupancyResponse::from).orElse(null))
-                .reservedOccupancy(reserved.map(OccupancyResponse::from).orElse(null))
-                .occupancies(occupancies.stream().map(OccupancyResponse::from).toList())
+                .currentOccupancy(active.map(this::toResponse).orElse(null))
+                .reservedOccupancy(reserved.map(this::toResponse).orElse(null))
+                .occupancies(occupancies.stream().map(this::toResponse).toList())
                 .history(history)
                 .build();
     }
@@ -584,6 +594,40 @@ public class OccupancyService {
     private UserEntity loadUser(UUID userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+    }
+
+    private OccupancyResponse toResponse(OccupancyEntity occupancy) {
+        return OccupancyResponse.from(occupancy, contractSnapshotService.loadChargeSnapshots(occupancy));
+    }
+
+    private OccupancyContractSnapshotService.ContractSnapshotInput toContractInput(AllocateOccupancyRequest request) {
+        return OccupancyContractSnapshotService.ContractSnapshotInput.builder()
+                .rentSnapshot(request.getRentSnapshot())
+                .depositSnapshot(request.getDepositSnapshot())
+                .foodEnabled(request.getFoodEnabled())
+                .foodChargeSnapshot(request.getFoodChargeSnapshot())
+                .otherCharges(request.getOtherCharges())
+                .build();
+    }
+
+    private OccupancyContractSnapshotService.ContractSnapshotInput toContractInput(MoveInOccupancyRequest request) {
+        return OccupancyContractSnapshotService.ContractSnapshotInput.builder()
+                .rentSnapshot(request.getRentSnapshot())
+                .depositSnapshot(request.getDepositSnapshot())
+                .foodEnabled(request.getFoodEnabled())
+                .foodChargeSnapshot(request.getFoodChargeSnapshot())
+                .otherCharges(request.getOtherCharges())
+                .build();
+    }
+
+    private OccupancyContractSnapshotService.ContractSnapshotInput toContractInput(TransferOccupancyRequest request) {
+        return OccupancyContractSnapshotService.ContractSnapshotInput.builder()
+                .rentSnapshot(request.getRentSnapshot())
+                .depositSnapshot(request.getDepositSnapshot())
+                .foodEnabled(request.getFoodEnabled())
+                .foodChargeSnapshot(request.getFoodChargeSnapshot())
+                .otherCharges(request.getOtherCharges())
+                .build();
     }
 
     private record TargetSnapshot(

@@ -3,10 +3,13 @@ package com.countin.countin_backend.occupancy.api.dto.response;
 import com.countin.countin_backend.member.domain.model.MemberCategory;
 import com.countin.countin_backend.occupancy.domain.model.AllocationTargetType;
 import com.countin.countin_backend.occupancy.domain.model.OccupancyStatus;
+import com.countin.countin_backend.occupancy.infrastructure.persistence.entity.OccupancyChargeSnapshotEntity;
 import com.countin.countin_backend.occupancy.infrastructure.persistence.entity.OccupancyEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Getter;
@@ -41,6 +44,13 @@ public class OccupancyResponse {
     private LocalDate expectedExitDate;
     private MemberCategory memberCategory;
     private boolean agreementSigned;
+    private BigDecimal rentSnapshot;
+    private BigDecimal depositSnapshot;
+    private boolean foodEnabled;
+    private BigDecimal foodChargeSnapshot;
+    private boolean foodIncludedInRent;
+    private LocalDateTime pricingLockedAt;
+    private List<OccupancyChargeLineResponse> otherCharges;
     private LocalDateTime vacatedAt;
     private UUID vacatedBy;
     private OccupancyStatus status;
@@ -49,6 +59,11 @@ public class OccupancyResponse {
     private LocalDateTime updatedAt;
 
     public static OccupancyResponse from(OccupancyEntity entity) {
+        return from(entity, List.of());
+    }
+
+    public static OccupancyResponse from(
+            OccupancyEntity entity, List<OccupancyChargeSnapshotEntity> chargeSnapshots) {
         LocalDate expectedExit = entity.getExpectedExitDate() != null
                 ? entity.getExpectedExitDate()
                 : entity.getExpectedCheckoutDate();
@@ -78,6 +93,13 @@ public class OccupancyResponse {
                 .expectedExitDate(expectedExit)
                 .memberCategory(entity.getMemberCategory())
                 .agreementSigned(entity.isAgreementSigned())
+                .rentSnapshot(entity.getRentSnapshot())
+                .depositSnapshot(entity.getDepositSnapshot())
+                .foodEnabled(entity.isFoodEnabled())
+                .foodChargeSnapshot(entity.getFoodChargeSnapshot())
+                .foodIncludedInRent(entity.isFoodIncludedInRent())
+                .pricingLockedAt(entity.getPricingLockedAt())
+                .otherCharges(chargeSnapshots.stream().map(OccupancyChargeLineResponse::from).toList())
                 .vacatedAt(entity.getVacatedAt())
                 .vacatedBy(entity.getVacatedBy() != null ? entity.getVacatedBy().getId() : null)
                 .status(entity.getStatus())

@@ -20,9 +20,13 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -106,6 +110,31 @@ public class OccupancyEntity extends BaseEntity {
     @Builder.Default
     @Column(name = "agreement_signed", nullable = false)
     private boolean agreementSigned = false;
+
+    @Column(name = "rent_snapshot", precision = 12, scale = 2)
+    private BigDecimal rentSnapshot;
+
+    @Builder.Default
+    @Column(name = "deposit_snapshot", nullable = false, precision = 12, scale = 2)
+    private BigDecimal depositSnapshot = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "food_enabled", nullable = false)
+    private boolean foodEnabled = false;
+
+    @Column(name = "food_charge_snapshot", precision = 12, scale = 2)
+    private BigDecimal foodChargeSnapshot;
+
+    @Builder.Default
+    @Column(name = "food_included_in_rent", nullable = false)
+    private boolean foodIncludedInRent = false;
+
+    @Column(name = "pricing_locked_at")
+    private LocalDateTime pricingLockedAt;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "occupancy")
+    private List<OccupancyChargeSnapshotEntity> chargeSnapshots = new ArrayList<>();
 
     @Column(name = "vacated_at")
     private LocalDateTime vacatedAt;

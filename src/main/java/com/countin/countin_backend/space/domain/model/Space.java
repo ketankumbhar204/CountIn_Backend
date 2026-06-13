@@ -1,5 +1,6 @@
 package com.countin.countin_backend.space.domain.model;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.Builder;
@@ -16,6 +17,8 @@ public class Space {
     private String contactNumber;
     private UUID ownerId;
     private boolean active;
+    private BigDecimal defaultFoodCharge;
+    private boolean foodIncludedInRent;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

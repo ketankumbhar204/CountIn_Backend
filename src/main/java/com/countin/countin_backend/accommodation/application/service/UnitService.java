@@ -192,6 +192,8 @@ public class UnitService {
         unit.setUnitNumber(request.getUnitNumber());
         unit.setStatus(request.getStatus());
         unit.setUnitKind(request.getUnitKind());
+        unit.setDefaultRent(request.getDefaultRent());
+        unit.setDefaultDeposit(request.getDefaultDeposit());
 
         return UnitResponse.from(unitRepository.save(unit));
     }

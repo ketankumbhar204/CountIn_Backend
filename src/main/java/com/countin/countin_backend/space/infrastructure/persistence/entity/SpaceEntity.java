@@ -13,6 +13,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -54,4 +55,11 @@ public class SpaceEntity extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "gender_policy", length = 20)
     private GenderPolicy genderPolicy;
+
+    @Column(name = "default_food_charge", precision = 12, scale = 2)
+    private BigDecimal defaultFoodCharge;
+
+    @Builder.Default
+    @Column(name = "food_included_in_rent", nullable = false)
+    private boolean foodIncludedInRent = false;
 }

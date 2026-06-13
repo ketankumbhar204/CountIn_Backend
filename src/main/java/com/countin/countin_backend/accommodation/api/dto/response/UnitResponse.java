@@ -4,6 +4,7 @@ import com.countin.countin_backend.accommodation.domain.model.AccommodationStatu
 import com.countin.countin_backend.accommodation.domain.model.UnitKind;
 import com.countin.countin_backend.accommodation.infrastructure.persistence.entity.UnitEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.Builder;
@@ -26,6 +27,8 @@ public class UnitResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private AccommodationActionMetadata actions;
+    private BigDecimal defaultRent;
+    private BigDecimal defaultDeposit;
 
     public static UnitResponse from(UnitEntity unit) {
         return from(unit, null);
@@ -45,6 +48,8 @@ public class UnitResponse {
                 .createdAt(unit.getCreatedAt())
                 .updatedAt(unit.getUpdatedAt())
                 .actions(actions)
+                .defaultRent(unit.getDefaultRent())
+                .defaultDeposit(unit.getDefaultDeposit())
                 .build();
     }
 }

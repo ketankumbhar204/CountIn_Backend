@@ -171,7 +171,7 @@ class MemberMasterServiceTest {
         when(spaceMembershipRepository.findActiveMembers(spaceId)).thenReturn(List.of());
         when(memberRepository.findBySpaceIdAndActiveTrue(spaceId)).thenReturn(List.of(member));
 
-        List<MemberResponse> members = memberMasterService.getMembers(spaceId, ownerId);
+        List<MemberResponse> members = memberMasterService.getMembers(spaceId, ownerId, null, null);
 
         assertThat(members).hasSize(1);
         assertThat(members.get(0).getMemberId()).isEqualTo(memberId);

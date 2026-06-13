@@ -3,6 +3,7 @@ package com.countin.countin_backend.member.api.dto.response;
 import com.countin.countin_backend.member.domain.model.MemberStatus;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
+import com.countin.countin_backend.occupancy.domain.model.MemberOccupancyStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -27,6 +28,9 @@ public class MemberResponse {
     @Schema(description = "Operational member status (distinct from soft-delete isActive)")
     private MemberStatus status;
 
+    @Schema(description = "Current occupancy assignment state in this space")
+    private MemberOccupancyStatus occupancyStatus;
+
     private LocalDateTime createdAt;
 
     public static MemberResponse from(MemberEntity member) {
@@ -37,6 +41,7 @@ public class MemberResponse {
                 .role(member.getRole())
                 .linkedUser(member.getUser() != null)
                 .status(member.getStatus())
+                .occupancyStatus(member.getOccupancyStatus())
                 .createdAt(member.getCreatedAt())
                 .build();
     }

@@ -17,6 +17,8 @@ import com.countin.countin_backend.member.api.dto.response.MemberResponse;
 import com.countin.countin_backend.member.api.dto.response.PendingInvitationResponse;
 import com.countin.countin_backend.member.application.service.MemberMasterService;
 import com.countin.countin_backend.member.application.service.MembershipService;
+import com.countin.countin_backend.member.domain.model.MembershipRole;
+import com.countin.countin_backend.occupancy.domain.model.MemberOccupancyStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -63,11 +66,16 @@ public class MemberController {
     @GetMapping("/members")
     @Operation(
             summary = "List members",
-            description = "Returns all active member master records for the space. "
+            description = "Returns active member master records for the space. "
+                    + "Optional search by name or mobile and filter by occupancyStatus. "
                     + "Any active space member may view.")
-    public ResponseEntity<ApiResponse<List<MemberResponse>>> getMembers(@PathVariable UUID spaceId) {
+    public ResponseEntity<ApiResponse<List<MemberResponse>>> getMembers(
+            @PathVariable UUID spaceId,
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) MemberOccupancyStatus occupancyStatus) {
         UUID callerId = SecurityUtils.getCurrentUserId();
-        List<MemberResponse> members = memberMasterService.getMembers(spaceId, callerId);
+        List<MemberResponse> members =
+                memberMasterService.getMembers(spaceId, callerId, search, occupancyStatus);
         return ResponseEntity.ok(ApiResponse.success(members));
     }
 

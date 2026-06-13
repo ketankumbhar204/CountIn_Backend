@@ -147,6 +147,8 @@ class SpaceServiceTest {
         when(request.getName()).thenReturn("Sunrise PG Updated");
         when(request.getAddress()).thenReturn("Mumbai");
         when(request.getContactNumber()).thenReturn("9123456789");
+        when(request.getFoodIncludedInRent()).thenReturn(false);
+        when(request.getDefaultFoodCharge()).thenReturn(new java.math.BigDecimal("2000"));
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
         when(spaceRepository.save(any(SpaceEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -156,6 +158,8 @@ class SpaceServiceTest {
         assertThat(response.getName()).isEqualTo("Sunrise PG Updated");
         assertThat(response.getAddress()).isEqualTo("Mumbai");
         assertThat(response.getContactNumber()).isEqualTo("9123456789");
+        assertThat(response.isFoodIncludedInRent()).isFalse();
+        assertThat(response.getDefaultFoodCharge()).isEqualByComparingTo("2000");
         assertThat(response.getType()).isEqualTo(SpaceType.PG);
         assertThat(response.getOwnerId()).isEqualTo(ownerId);
 
@@ -171,7 +175,7 @@ class SpaceServiceTest {
 
         assertThatThrownBy(() -> spaceService.updateSpace(spaceId, otherUserId, request))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Only the space owner")
+                .hasMessageContaining("Only OWNER or MANAGER")
                 .satisfies(ex -> assertThat(((BusinessException) ex).getStatus())
                         .isEqualTo(HttpStatus.FORBIDDEN));
 

@@ -5,6 +5,8 @@ import com.countin.countin_backend.accommodation.domain.model.UnitKind;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.DecimalMin;
+import java.math.BigDecimal;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -27,4 +29,10 @@ public class UpdateUnitRequest {
 
     @Schema(description = "Optional apartment classification", implementation = UnitKind.class)
     private UnitKind unitKind;
+
+    @DecimalMin(value = "0.0", inclusive = true)
+    private BigDecimal defaultRent;
+
+    @DecimalMin(value = "0.0", inclusive = true)
+    private BigDecimal defaultDeposit;
 }

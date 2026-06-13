@@ -136,6 +136,8 @@ public class BedService {
             assertNoBlockingOccupancy(bedId);
         }
         bed.setStatus(request.getStatus());
+        bed.setDefaultRent(request.getDefaultRent());
+        bed.setDefaultDeposit(request.getDefaultDeposit());
 
         return BedResponse.from(bedRepository.save(bed));
     }

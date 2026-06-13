@@ -98,7 +98,7 @@ public class SpaceController {
     @PutMapping("/{spaceId}")
     @Operation(
             summary = "Update a space",
-            description = "Updates name, address, and contact number. Only the space owner may update.")
+            description = "Updates name, address, contact, and food pricing policy. OWNER or MANAGER only.")
     public ResponseEntity<ApiResponse<SpaceDetailsResponse>> updateSpace(
             @PathVariable UUID spaceId,
             @RequestBody @Valid UpdateSpaceRequest request) {

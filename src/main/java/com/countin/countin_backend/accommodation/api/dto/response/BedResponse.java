@@ -4,6 +4,7 @@ import com.countin.countin_backend.accommodation.domain.model.AccommodationStatu
 import com.countin.countin_backend.accommodation.infrastructure.persistence.entity.BedEntity;
 import com.countin.countin_backend.occupancy.api.dto.response.BedOccupantSummaryResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.Builder;
@@ -24,6 +25,8 @@ public class BedResponse {
     private LocalDateTime updatedAt;
     private AccommodationActionMetadata actions;
     private BedOccupantSummaryResponse occupant;
+    private BigDecimal defaultRent;
+    private BigDecimal defaultDeposit;
 
     public static BedResponse from(BedEntity bed) {
         return from(bed, null, null);
@@ -45,6 +48,8 @@ public class BedResponse {
                 .updatedAt(bed.getUpdatedAt())
                 .actions(actions)
                 .occupant(occupant)
+                .defaultRent(bed.getDefaultRent())
+                .defaultDeposit(bed.getDefaultDeposit())
                 .build();
     }
 }

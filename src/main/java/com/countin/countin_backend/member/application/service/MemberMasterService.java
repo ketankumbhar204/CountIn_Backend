@@ -29,6 +29,7 @@ import com.countin.countin_backend.member.infrastructure.persistence.repository.
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.SpaceMembershipRepository;
 import com.countin.countin_backend.occupancy.application.service.OccupancyService;
+import com.countin.countin_backend.occupancy.domain.model.MemberOccupancyStatus;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
 import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
@@ -94,18 +95,34 @@ public class MemberMasterService {
         return MemberResponse.from(member);
     }
 
-    @Transactional
-    public List<MemberResponse> getMembers(UUID spaceId, UUID callerId) {
-        log.info("Fetching members: spaceId={}, callerId={}", spaceId, callerId);
+    @Transactional(readOnly = true)
+    public List<MemberResponse> getMembers(
+            UUID spaceId, UUID callerId, String search, MemberOccupancyStatus occupancyStatus) {
+        log.info(
+                "Fetching members: spaceId={}, callerId={}, search={}, occupancyStatus={}",
+                spaceId,
+                callerId,
+                search,
+                occupancyStatus);
 
         assertSpaceExists(spaceId);
         assertCallerBelongsToSpace(spaceId, callerId);
         syncOwnerManagerMembershipRecords(spaceId);
 
-        return memberRepository.findBySpaceIdAndActiveTrue(spaceId)
-                .stream()
-                .map(MemberResponse::from)
-                .toList();
+        String normalizedSearch = normalizeSearch(search);
+        List<MemberEntity> members = normalizedSearch != null || occupancyStatus != null
+                ? memberRepository.searchActiveMembers(spaceId, normalizedSearch, occupancyStatus)
+                : memberRepository.findBySpaceIdAndActiveTrue(spaceId);
+
+        return members.stream().map(MemberResponse::from).toList();
+    }
+
+    private static String normalizeSearch(String search) {
+        if (search == null) {
+            return null;
+        }
+        String trimmed = search.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     /**

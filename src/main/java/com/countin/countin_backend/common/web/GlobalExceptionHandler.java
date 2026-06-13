@@ -44,7 +44,7 @@ public class GlobalExceptionHandler {
         log.warn("Business rule violation: {}", ex.getMessage());
         return ResponseEntity
                 .status(ex.getStatus())
-                .body(ApiResponse.error(ex.getMessage()));
+                .body(ApiResponse.error(ex.getMessage(), ex.getErrorCode()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -92,9 +92,29 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(
             DataIntegrityViolationException ex) {
         log.error("Data integrity violation: {}", ex.getMessage());
+        String message = mapOccupancyConstraintMessage(ex.getMostSpecificCause().getMessage());
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
-                .body(ApiResponse.error("A record with the same unique value already exists"));
+                .body(ApiResponse.error(message));
+    }
+
+    private static String mapOccupancyConstraintMessage(String detail) {
+        if (detail == null) {
+            return "A record with the same unique value already exists";
+        }
+        if (detail.contains("uq_occupancies_bed_active") || detail.contains("uq_occupancies_bed_reserved")) {
+            return "Bed is not available";
+        }
+        if (detail.contains("uq_occupancies_room_active") || detail.contains("uq_occupancies_room_reserved")) {
+            return "Room is not available";
+        }
+        if (detail.contains("uq_occupancies_unit_active") || detail.contains("uq_occupancies_unit_reserved")) {
+            return "Unit is not available";
+        }
+        if (detail.contains("uq_occupancies_member_active") || detail.contains("uq_occupancies_member_reserved")) {
+            return "Member already has an active or reserved occupancy";
+        }
+        return "A record with the same unique value already exists";
     }
 
     @ExceptionHandler(Exception.class)

@@ -19,23 +19,31 @@ public final class SpaceMapper {
                 .contactNumber(entity.getContactNumber())
                 .ownerId(entity.getOwner().getId())
                 .active(entity.isActive())
+                .defaultFoodCharge(entity.getDefaultFoodCharge())
+                .foodIncludedInRent(entity.isFoodIncludedInRent())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
     }
 
     public static Space applyUpdate(Space space, UpdateSpaceRequest request) {
-        return space.toBuilder()
+        Space.SpaceBuilder builder = space.toBuilder()
                 .name(request.getName())
                 .address(request.getAddress())
                 .contactNumber(request.getContactNumber())
-                .build();
+                .defaultFoodCharge(request.getDefaultFoodCharge());
+        if (request.getFoodIncludedInRent() != null) {
+            builder.foodIncludedInRent(request.getFoodIncludedInRent());
+        }
+        return builder.build();
     }
 
     public static void applyToEntity(SpaceEntity entity, Space space) {
         entity.setName(space.getName());
         entity.setAddress(space.getAddress());
         entity.setContactNumber(space.getContactNumber());
+        entity.setDefaultFoodCharge(space.getDefaultFoodCharge());
+        entity.setFoodIncludedInRent(space.isFoodIncludedInRent());
     }
 
     public static SpaceDetailsResponse toDetailsResponse(Space space) {

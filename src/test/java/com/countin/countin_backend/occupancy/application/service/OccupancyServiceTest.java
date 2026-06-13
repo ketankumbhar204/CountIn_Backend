@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -75,6 +77,9 @@ class OccupancyServiceTest {
     @Mock
     private GenderPolicyValidator genderPolicyValidator;
 
+    @Mock
+    private OccupancyContractSnapshotService contractSnapshotService;
+
     @InjectMocks
     private OccupancyService occupancyService;
 
@@ -134,6 +139,20 @@ class OccupancyServiceTest {
                 .room(room)
                 .bed(bed)
                 .build();
+
+        lenient()
+                .doAnswer(invocation -> {
+                    OccupancyEntity occ = invocation.getArgument(0);
+                    occ.setRentSnapshot(new java.math.BigDecimal("8000"));
+                    occ.setDepositSnapshot(java.math.BigDecimal.ZERO);
+                    occ.setPricingLockedAt(java.time.LocalDateTime.now());
+                    return null;
+                })
+                .when(contractSnapshotService)
+                .applyActivationSnapshot(any(), any(), any(), any(), any());
+        lenient()
+                .when(contractSnapshotService.loadChargeSnapshots(any()))
+                .thenReturn(java.util.List.of());
     }
 
     @Test
@@ -162,6 +181,7 @@ class OccupancyServiceTest {
         occupancyService.allocate(spaceId, callerId, request);
 
         verify(accommodationStatusSyncService).markOccupied(target);
+        verify(contractSnapshotService).applyActivationSnapshot(any(), any(), eq(target), eq(space), any());
         verify(memberRepository).save(member);
         assertThat(member.getOccupancyStatus()).isEqualTo(MemberOccupancyStatus.ALLOCATED);
         verify(occupancyHistoryRepository).save(any());

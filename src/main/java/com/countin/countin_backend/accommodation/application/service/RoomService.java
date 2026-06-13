@@ -134,6 +134,8 @@ public class RoomService {
         room.setRoomType(request.getRoomType());
         room.setCapacity(request.getCapacity());
         room.setStatus(request.getStatus());
+        room.setDefaultRent(request.getDefaultRent());
+        room.setDefaultDeposit(request.getDefaultDeposit());
 
         return RoomResponse.from(roomRepository.save(room));
     }

@@ -4,6 +4,7 @@ import com.countin.countin_backend.accommodation.domain.model.AccommodationStatu
 import com.countin.countin_backend.accommodation.domain.model.RoomType;
 import com.countin.countin_backend.accommodation.infrastructure.persistence.entity.RoomEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.Builder;
@@ -29,6 +30,8 @@ public class RoomResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private AccommodationActionMetadata actions;
+    private BigDecimal defaultRent;
+    private BigDecimal defaultDeposit;
 
     public static RoomResponse from(RoomEntity room) {
         return from(room, null);
@@ -49,6 +52,8 @@ public class RoomResponse {
                 .createdAt(room.getCreatedAt())
                 .updatedAt(room.getUpdatedAt())
                 .actions(actions)
+                .defaultRent(room.getDefaultRent())
+                .defaultDeposit(room.getDefaultDeposit())
                 .build();
     }
 

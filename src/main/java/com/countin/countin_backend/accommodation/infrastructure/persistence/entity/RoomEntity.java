@@ -3,6 +3,7 @@ package com.countin.countin_backend.accommodation.infrastructure.persistence.ent
 import com.countin.countin_backend.accommodation.domain.model.AccommodationStatus;
 import com.countin.countin_backend.accommodation.domain.model.RoomType;
 import com.countin.countin_backend.common.model.BaseEntity;
+import java.math.BigDecimal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -62,4 +63,10 @@ public class RoomEntity extends BaseEntity {
     @Builder.Default
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
+
+    @Column(name = "default_rent", precision = 12, scale = 2)
+    private BigDecimal defaultRent;
+
+    @Column(name = "default_deposit", precision = 12, scale = 2)
+    private BigDecimal defaultDeposit;
 }

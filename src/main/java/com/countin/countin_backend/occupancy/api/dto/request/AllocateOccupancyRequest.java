@@ -3,7 +3,11 @@ package com.countin.countin_backend.occupancy.api.dto.request;
 import com.countin.countin_backend.occupancy.domain.model.AllocationTargetType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
@@ -25,4 +29,19 @@ public class AllocateOccupancyRequest {
 
     private LocalDate expectedCheckoutDate;
     private String remarks;
+
+    @Schema(description = "Monthly rent contract snapshot; required if target has no defaultRent")
+    private BigDecimal rentSnapshot;
+
+    @Schema(description = "Security deposit contract snapshot; defaults to 0")
+    private BigDecimal depositSnapshot;
+
+    private Boolean foodEnabled;
+    private BigDecimal foodChargeSnapshot;
+
+    @Schema(description = "Ignored at activation; server copies space foodIncludedInRent policy")
+    private Boolean foodIncludedInRent;
+
+    @Valid
+    private List<OccupancyChargeLineRequest> otherCharges = new ArrayList<>();
 }
