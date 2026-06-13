@@ -6,6 +6,7 @@ import com.countin.countin_backend.accommodation.infrastructure.persistence.enti
 import com.countin.countin_backend.accommodation.infrastructure.persistence.entity.RoomEntity;
 import com.countin.countin_backend.accommodation.infrastructure.persistence.entity.UnitEntity;
 import com.countin.countin_backend.common.model.BaseEntity;
+import com.countin.countin_backend.member.domain.model.MemberCategory;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
 import com.countin.countin_backend.occupancy.domain.model.AllocationTargetType;
 import com.countin.countin_backend.occupancy.domain.model.OccupancyStatus;
@@ -83,7 +84,28 @@ public class OccupancyEntity extends BaseEntity {
     private UserEntity allocatedBy;
 
     @Column(name = "expected_checkout_date")
+    @Deprecated
     private LocalDate expectedCheckoutDate;
+
+    @Column(name = "reserved_at")
+    private LocalDateTime reservedAt;
+
+    @Column(name = "move_in_date", nullable = false)
+    private LocalDate moveInDate;
+
+    @Column(name = "actual_move_in_at")
+    private LocalDateTime actualMoveInAt;
+
+    @Column(name = "expected_exit_date")
+    private LocalDate expectedExitDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "member_category", length = 30)
+    private MemberCategory memberCategory;
+
+    @Builder.Default
+    @Column(name = "agreement_signed", nullable = false)
+    private boolean agreementSigned = false;
 
     @Column(name = "vacated_at")
     private LocalDateTime vacatedAt;

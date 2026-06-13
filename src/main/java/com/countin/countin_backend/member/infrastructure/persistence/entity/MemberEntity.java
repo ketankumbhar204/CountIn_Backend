@@ -1,6 +1,8 @@
 package com.countin.countin_backend.member.infrastructure.persistence.entity;
 
 import com.countin.countin_backend.common.model.BaseEntity;
+import com.countin.countin_backend.member.domain.model.MemberCategory;
+import com.countin.countin_backend.member.domain.model.MemberGender;
 import com.countin.countin_backend.member.domain.model.MemberStatus;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.occupancy.domain.model.MemberOccupancyStatus;
@@ -97,4 +99,12 @@ public class MemberEntity extends BaseEntity {
     @Builder.Default
     @Column(name = "deposit_refunded", nullable = false, precision = 12, scale = 2)
     private BigDecimal depositRefunded = BigDecimal.ZERO;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private MemberGender gender;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "member_category", length = 30)
+    private MemberCategory memberCategory;
 }

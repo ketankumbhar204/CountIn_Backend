@@ -114,6 +114,13 @@ Mess spaces do not use Accommodation Management.
 * ✅ Inline name edit on list rows (building, floor, unit, room, bed)
 * Full edit screens kept for other fields
 
+### Occupancy Management
+
+* Allocate member to bed / room / unit (by space type)
+* Transfer member
+* Vacate member
+* Member accommodation section + occupancy history
+
 ### Property Structure
 
 #### Buildings

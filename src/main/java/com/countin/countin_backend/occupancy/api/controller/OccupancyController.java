@@ -4,6 +4,9 @@ import com.countin.countin_backend.common.security.SecurityUtils;
 import com.countin.countin_backend.common.web.ApiResponse;
 import com.countin.countin_backend.common.web.PagedResponse;
 import com.countin.countin_backend.occupancy.api.dto.request.AllocateOccupancyRequest;
+import com.countin.countin_backend.occupancy.api.dto.request.CancelReservationRequest;
+import com.countin.countin_backend.occupancy.api.dto.request.MoveInOccupancyRequest;
+import com.countin.countin_backend.occupancy.api.dto.request.ReserveOccupancyRequest;
 import com.countin.countin_backend.occupancy.api.dto.request.TransferOccupancyRequest;
 import com.countin.countin_backend.occupancy.api.dto.request.VacateOccupancyRequest;
 import com.countin.countin_backend.occupancy.api.dto.response.MemberOccupancyListResponse;
@@ -38,8 +41,41 @@ public class OccupancyController {
 
     private final OccupancyService occupancyService;
 
+    @PostMapping("/occupancies/reserve")
+    @Operation(summary = "Reserve member", description = "Creates a RESERVED occupancy for a future move-in. OWNER or MANAGER only.")
+    public ResponseEntity<ApiResponse<OccupancyResponse>> reserve(
+            @PathVariable UUID spaceId, @RequestBody @Valid ReserveOccupancyRequest request) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        OccupancyResponse response = occupancyService.reserve(spaceId, callerId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success("Reservation created successfully", response));
+    }
+
+    @PostMapping("/occupancies/{occupancyId}/move-in")
+    @Operation(summary = "Move in member", description = "Promotes a RESERVED occupancy to ACTIVE. OWNER or MANAGER only.")
+    public ResponseEntity<ApiResponse<OccupancyResponse>> moveIn(
+            @PathVariable UUID spaceId,
+            @PathVariable UUID occupancyId,
+            @RequestBody(required = false) @Valid MoveInOccupancyRequest request) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        MoveInOccupancyRequest body = request != null ? request : new MoveInOccupancyRequest();
+        OccupancyResponse response = occupancyService.moveIn(spaceId, occupancyId, callerId, body);
+        return ResponseEntity.ok(ApiResponse.success("Move-in completed successfully", response));
+    }
+
+    @PostMapping("/occupancies/{occupancyId}/cancel-reservation")
+    @Operation(summary = "Cancel reservation", description = "Cancels a RESERVED occupancy and releases inventory. OWNER or MANAGER only.")
+    public ResponseEntity<ApiResponse<OccupancyResponse>> cancelReservation(
+            @PathVariable UUID spaceId,
+            @PathVariable UUID occupancyId,
+            @RequestBody(required = false) @Valid CancelReservationRequest request) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        CancelReservationRequest body = request != null ? request : new CancelReservationRequest();
+        OccupancyResponse response = occupancyService.cancelReservation(spaceId, occupancyId, callerId, body);
+        return ResponseEntity.ok(ApiResponse.success("Reservation cancelled successfully", response));
+    }
+
     @PostMapping("/occupancies")
-    @Operation(summary = "Allocate member", description = "Assigns a member to a bed, room, or unit. OWNER or MANAGER only.")
+    @Operation(summary = "Allocate member (walk-in)", description = "Immediate ACTIVE allocation (move-in today). OWNER or MANAGER only.")
     public ResponseEntity<ApiResponse<OccupancyResponse>> allocate(
             @PathVariable UUID spaceId, @RequestBody @Valid AllocateOccupancyRequest request) {
         UUID callerId = SecurityUtils.getCurrentUserId();

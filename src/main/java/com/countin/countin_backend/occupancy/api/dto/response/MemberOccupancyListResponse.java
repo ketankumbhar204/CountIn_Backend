@@ -11,6 +11,7 @@ import lombok.Getter;
 public class MemberOccupancyListResponse {
 
     private OccupancyResponse currentOccupancy;
+    private OccupancyResponse reservedOccupancy;
     private List<OccupancyResponse> occupancies;
     private List<OccupancyHistoryEntryResponse> history;
 }

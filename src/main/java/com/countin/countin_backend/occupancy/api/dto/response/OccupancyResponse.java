@@ -1,10 +1,9 @@
 package com.countin.countin_backend.occupancy.api.dto.response;
 
+import com.countin.countin_backend.member.domain.model.MemberCategory;
 import com.countin.countin_backend.occupancy.domain.model.AllocationTargetType;
-import com.countin.countin_backend.occupancy.domain.model.OccupancyHistoryEvent;
 import com.countin.countin_backend.occupancy.domain.model.OccupancyStatus;
 import com.countin.countin_backend.occupancy.infrastructure.persistence.entity.OccupancyEntity;
-import com.countin.countin_backend.occupancy.infrastructure.persistence.entity.OccupancyHistoryEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -34,7 +33,14 @@ public class OccupancyResponse {
     private String bedName;
     private LocalDateTime allocatedAt;
     private UUID allocatedBy;
+    @Deprecated
     private LocalDate expectedCheckoutDate;
+    private LocalDateTime reservedAt;
+    private LocalDate moveInDate;
+    private LocalDateTime actualMoveInAt;
+    private LocalDate expectedExitDate;
+    private MemberCategory memberCategory;
+    private boolean agreementSigned;
     private LocalDateTime vacatedAt;
     private UUID vacatedBy;
     private OccupancyStatus status;
@@ -43,6 +49,10 @@ public class OccupancyResponse {
     private LocalDateTime updatedAt;
 
     public static OccupancyResponse from(OccupancyEntity entity) {
+        LocalDate expectedExit = entity.getExpectedExitDate() != null
+                ? entity.getExpectedExitDate()
+                : entity.getExpectedCheckoutDate();
+
         return OccupancyResponse.builder()
                 .occupancyId(entity.getId())
                 .spaceId(entity.getSpace().getId())
@@ -61,7 +71,13 @@ public class OccupancyResponse {
                 .bedName(entity.getBed() != null ? entity.getBed().getName() : null)
                 .allocatedAt(entity.getAllocatedAt())
                 .allocatedBy(entity.getAllocatedBy().getId())
-                .expectedCheckoutDate(entity.getExpectedCheckoutDate())
+                .expectedCheckoutDate(expectedExit)
+                .reservedAt(entity.getReservedAt())
+                .moveInDate(entity.getMoveInDate())
+                .actualMoveInAt(entity.getActualMoveInAt())
+                .expectedExitDate(expectedExit)
+                .memberCategory(entity.getMemberCategory())
+                .agreementSigned(entity.isAgreementSigned())
                 .vacatedAt(entity.getVacatedAt())
                 .vacatedBy(entity.getVacatedBy() != null ? entity.getVacatedBy().getId() : null)
                 .status(entity.getStatus())

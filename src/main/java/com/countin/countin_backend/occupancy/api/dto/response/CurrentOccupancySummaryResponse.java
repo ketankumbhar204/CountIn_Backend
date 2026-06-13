@@ -1,7 +1,9 @@
 package com.countin.countin_backend.occupancy.api.dto.response;
 
 import com.countin.countin_backend.occupancy.domain.model.AllocationTargetType;
+import com.countin.countin_backend.occupancy.domain.model.OccupancyStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.time.LocalDate;
 import java.util.UUID;
 import lombok.Builder;
 import lombok.Getter;
@@ -11,6 +13,8 @@ import lombok.Getter;
 @Schema(description = "Current member accommodation assignment summary")
 public class CurrentOccupancySummaryResponse {
 
+    private UUID occupancyId;
+    private OccupancyStatus occupancyStatus;
     private AllocationTargetType targetType;
     private UUID buildingId;
     private String buildingName;
@@ -22,4 +26,5 @@ public class CurrentOccupancySummaryResponse {
     private String roomName;
     private UUID bedId;
     private String bedName;
+    private LocalDate moveInDate;
 }

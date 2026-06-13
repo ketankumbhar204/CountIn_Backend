@@ -4,11 +4,16 @@ import com.countin.countin_backend.accommodation.application.service.Accommodati
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
 import com.countin.countin_backend.common.web.PagedResponse;
+import com.countin.countin_backend.member.domain.model.MemberCategory;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
 import com.countin.countin_backend.occupancy.api.dto.request.AllocateOccupancyRequest;
+import com.countin.countin_backend.occupancy.api.dto.request.CancelReservationRequest;
+import com.countin.countin_backend.occupancy.api.dto.request.MoveInOccupancyRequest;
+import com.countin.countin_backend.occupancy.api.dto.request.ReserveOccupancyRequest;
 import com.countin.countin_backend.occupancy.api.dto.request.TransferOccupancyRequest;
 import com.countin.countin_backend.occupancy.api.dto.request.VacateOccupancyRequest;
+import com.countin.countin_backend.occupancy.api.dto.response.BedOccupantSummaryResponse;
 import com.countin.countin_backend.occupancy.api.dto.response.CurrentOccupancySummaryResponse;
 import com.countin.countin_backend.occupancy.api.dto.response.MemberOccupancyListResponse;
 import com.countin.countin_backend.occupancy.api.dto.response.OccupancyHistoryEntryResponse;
@@ -21,10 +26,10 @@ import com.countin.countin_backend.occupancy.infrastructure.persistence.entity.O
 import com.countin.countin_backend.occupancy.infrastructure.persistence.entity.OccupancyHistoryEntity;
 import com.countin.countin_backend.occupancy.infrastructure.persistence.repository.OccupancyHistoryRepository;
 import com.countin.countin_backend.occupancy.infrastructure.persistence.repository.OccupancyRepository;
-import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
 import com.countin.countin_backend.user.infrastructure.persistence.repository.UserRepository;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -49,6 +54,126 @@ public class OccupancyService {
     private final AccommodationAccessService accommodationAccessService;
     private final OccupancyTargetService occupancyTargetService;
     private final AccommodationStatusSyncService accommodationStatusSyncService;
+    private final GenderPolicyValidator genderPolicyValidator;
+
+    @Transactional
+    public OccupancyResponse reserve(UUID spaceId, UUID callerId, ReserveOccupancyRequest request) {
+        log.info("Reserving occupancy: spaceId={}, memberId={}, callerId={}", spaceId, request.getMemberId(), callerId);
+
+        occupancyAccessService.assertCanManageOccupancy(spaceId, callerId);
+        SpaceEntity space = accommodationAccessService.loadAccommodationSpace(spaceId);
+        UserEntity actor = loadUser(callerId);
+
+        MemberEntity member = loadActiveMember(spaceId, request.getMemberId());
+        assertMemberHasNoCurrentOccupancy(spaceId, member.getId());
+        validateMoveInDateForReserve(request.getMoveInDate());
+
+        genderPolicyValidator.validate(space, member);
+
+        OccupancyTargetService.ResolvedTarget target = occupancyTargetService.resolveForReserve(
+                spaceId,
+                space.getType(),
+                request.getTargetType(),
+                request.getBedId(),
+                request.getRoomId(),
+                request.getUnitId());
+        assertTargetNotHeld(target);
+
+        LocalDateTime now = LocalDateTime.now();
+        MemberCategory category = request.getMemberCategory() != null
+                ? request.getMemberCategory()
+                : member.getMemberCategory();
+
+        OccupancyEntity occupancy = buildOccupancy(
+                        space, member, target, actor, now, OccupancyStatus.RESERVED, request.getMoveInDate(), null)
+                .reservedAt(now)
+                .expectedExitDate(request.getExpectedExitDate())
+                .memberCategory(category)
+                .remarks(request.getRemarks())
+                .build();
+
+        occupancy = occupancyRepository.save(occupancy);
+        accommodationStatusSyncService.markReserved(target);
+        member.setOccupancyStatus(MemberOccupancyStatus.RESERVED);
+        memberRepository.save(member);
+
+        recordHistory(occupancy, OccupancyHistoryEvent.RESERVED, null, targetSnapshot(target), actor, now, request.getRemarks());
+        return OccupancyResponse.from(occupancy);
+    }
+
+    @Transactional
+    public OccupancyResponse moveIn(UUID spaceId, UUID occupancyId, UUID callerId, MoveInOccupancyRequest request) {
+        log.info("Move-in occupancy: spaceId={}, occupancyId={}, callerId={}", spaceId, occupancyId, callerId);
+
+        occupancyAccessService.assertCanManageOccupancy(spaceId, callerId);
+        accommodationAccessService.loadAccommodationSpace(spaceId);
+        UserEntity actor = loadUser(callerId);
+
+        MoveInOccupancyRequest body = request != null ? request : new MoveInOccupancyRequest();
+        OccupancyEntity occupancy = loadReservedOccupancy(spaceId, occupancyId);
+
+        LocalDate scheduledMoveIn = occupancy.getMoveInDate();
+        LocalDate effectiveMoveIn = body.getMoveInDate() != null ? body.getMoveInDate() : scheduledMoveIn;
+        if (!body.isAllowEarlyMoveIn() && effectiveMoveIn.isAfter(LocalDate.now())) {
+            throw new BusinessException("Move-in date has not been reached");
+        }
+
+        genderPolicyValidator.validate(occupancy.getSpace(), occupancy.getMember());
+
+        LocalDateTime now = LocalDateTime.now();
+        occupancy.setStatus(OccupancyStatus.ACTIVE);
+        occupancy.setMoveInDate(effectiveMoveIn);
+        occupancy.setActualMoveInAt(now);
+        if (body.getExpectedExitDate() != null) {
+            occupancy.setExpectedExitDate(body.getExpectedExitDate());
+            occupancy.setExpectedCheckoutDate(body.getExpectedExitDate());
+        }
+        if (body.getAgreementSigned() != null) {
+            occupancy.setAgreementSigned(body.getAgreementSigned());
+        }
+        occupancy.setUpdatedBy(actor);
+        if (body.getRemarks() != null && !body.getRemarks().isBlank()) {
+            occupancy.setRemarks(body.getRemarks());
+        }
+        occupancy = occupancyRepository.save(occupancy);
+
+        OccupancyTargetService.ResolvedTarget target = toResolvedTarget(occupancy);
+        accommodationStatusSyncService.markOccupied(target);
+
+        MemberEntity member = occupancy.getMember();
+        member.setOccupancyStatus(MemberOccupancyStatus.ALLOCATED);
+        memberRepository.save(member);
+
+        recordHistory(occupancy, OccupancyHistoryEvent.MOVE_IN, targetSnapshot(occupancy), targetSnapshot(occupancy), actor, now, body.getRemarks());
+        return OccupancyResponse.from(occupancy);
+    }
+
+    @Transactional
+    public OccupancyResponse cancelReservation(
+            UUID spaceId, UUID occupancyId, UUID callerId, CancelReservationRequest request) {
+        log.info("Cancel reservation: spaceId={}, occupancyId={}, callerId={}", spaceId, occupancyId, callerId);
+
+        occupancyAccessService.assertCanManageOccupancy(spaceId, callerId);
+        accommodationAccessService.loadAccommodationSpace(spaceId);
+        UserEntity actor = loadUser(callerId);
+
+        CancelReservationRequest body = request != null ? request : new CancelReservationRequest();
+        OccupancyEntity occupancy = loadReservedOccupancy(spaceId, occupancyId);
+        TargetSnapshot fromTarget = targetSnapshot(occupancy);
+        LocalDateTime now = LocalDateTime.now();
+
+        closeOccupancy(occupancy, actor, now, body.getRemarks());
+        accommodationStatusSyncService.releaseTarget(
+                fromTarget.targetType(),
+                fromTarget.bedId(),
+                fromTarget.roomId(),
+                fromTarget.unitId());
+
+        refreshMemberOccupancyStatus(occupancy.getMember(), spaceId);
+
+        recordHistory(occupancy, OccupancyHistoryEvent.RESERVATION_CANCELLED, fromTarget, null, actor, now, body.getRemarks());
+        return OccupancyResponse.from(occupancy);
+    }
 
     @Transactional
     public OccupancyResponse allocate(UUID spaceId, UUID callerId, AllocateOccupancyRequest request) {
@@ -59,13 +184,9 @@ public class OccupancyService {
         SpaceEntity space = accommodationAccessService.loadAccommodationSpace(spaceId);
         UserEntity actor = loadUser(callerId);
 
-        MemberEntity member = memberRepository.findByIdAndSpaceIdAndActiveTrue(request.getMemberId(), spaceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Member", "id", request.getMemberId()));
-
-        if (occupancyRepository.existsBySpaceIdAndMemberIdAndStatus(
-                spaceId, member.getId(), OccupancyStatus.ACTIVE)) {
-            throw new BusinessException("Member already has an active occupancy in this space");
-        }
+        MemberEntity member = loadActiveMember(spaceId, request.getMemberId());
+        assertMemberHasNoCurrentOccupancy(spaceId, member.getId());
+        genderPolicyValidator.validate(space, member);
 
         OccupancyTargetService.ResolvedTarget target = occupancyTargetService.resolve(
                 spaceId,
@@ -74,25 +195,16 @@ public class OccupancyService {
                 request.getBedId(),
                 request.getRoomId(),
                 request.getUnitId());
-        assertTargetAvailable(target);
+        assertTargetNotHeld(target);
 
+        LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
-        OccupancyEntity occupancy = OccupancyEntity.builder()
-                .space(space)
-                .member(member)
-                .targetType(target.getTargetType())
-                .building(target.getBuilding())
-                .floor(target.getFloor())
-                .unit(target.getUnit())
-                .room(target.getRoom())
-                .bed(target.getBed())
-                .allocatedAt(now)
-                .allocatedBy(actor)
-                .expectedCheckoutDate(request.getExpectedCheckoutDate())
-                .status(OccupancyStatus.ACTIVE)
+        LocalDate expectedExit = request.getExpectedCheckoutDate();
+
+        OccupancyEntity occupancy = buildOccupancy(space, member, target, actor, now, OccupancyStatus.ACTIVE, today, now)
+                .expectedCheckoutDate(expectedExit)
+                .expectedExitDate(expectedExit)
                 .remarks(request.getRemarks())
-                .createdBy(actor)
-                .updatedBy(actor)
                 .build();
 
         occupancy = occupancyRepository.save(occupancy);
@@ -100,15 +212,7 @@ public class OccupancyService {
         member.setOccupancyStatus(MemberOccupancyStatus.ALLOCATED);
         memberRepository.save(member);
 
-        recordHistory(
-                occupancy,
-                OccupancyHistoryEvent.ALLOCATED,
-                null,
-                targetSnapshot(target),
-                actor,
-                now,
-                request.getRemarks());
-
+        recordHistory(occupancy, OccupancyHistoryEvent.ALLOCATED, null, targetSnapshot(target), actor, now, request.getRemarks());
         return OccupancyResponse.from(occupancy);
     }
 
@@ -122,6 +226,7 @@ public class OccupancyService {
         UserEntity actor = loadUser(callerId);
 
         OccupancyEntity current = loadActiveOccupancy(spaceId, occupancyId);
+        genderPolicyValidator.validate(space, current.getMember());
         TargetSnapshot fromTarget = targetSnapshot(current);
 
         OccupancyTargetService.ResolvedTarget newTarget = occupancyTargetService.resolve(
@@ -131,8 +236,9 @@ public class OccupancyService {
                 request.getBedId(),
                 request.getRoomId(),
                 request.getUnitId());
-        assertTargetAvailable(newTarget);
+        assertTargetNotHeld(newTarget);
 
+        LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
         closeOccupancy(current, actor, now, request.getRemarks());
         accommodationStatusSyncService.releaseTarget(
@@ -141,21 +247,16 @@ public class OccupancyService {
                 fromTarget.roomId(),
                 fromTarget.unitId());
 
-        OccupancyEntity next = OccupancyEntity.builder()
-                .space(space)
-                .member(current.getMember())
-                .targetType(newTarget.getTargetType())
-                .building(newTarget.getBuilding())
-                .floor(newTarget.getFloor())
-                .unit(newTarget.getUnit())
-                .room(newTarget.getRoom())
-                .bed(newTarget.getBed())
-                .allocatedAt(now)
-                .allocatedBy(actor)
-                .status(OccupancyStatus.ACTIVE)
+        OccupancyEntity next = buildOccupancy(
+                        space,
+                        current.getMember(),
+                        newTarget,
+                        actor,
+                        now,
+                        OccupancyStatus.ACTIVE,
+                        today,
+                        now)
                 .remarks(request.getRemarks())
-                .createdBy(actor)
-                .updatedBy(actor)
                 .build();
 
         next = occupancyRepository.save(next);
@@ -193,9 +294,7 @@ public class OccupancyService {
                 fromTarget.roomId(),
                 fromTarget.unitId());
 
-        MemberEntity member = occupancy.getMember();
-        member.setOccupancyStatus(MemberOccupancyStatus.VACATED);
-        memberRepository.save(member);
+        refreshMemberOccupancyStatus(occupancy.getMember(), spaceId);
 
         recordHistory(
                 occupancy,
@@ -254,12 +353,16 @@ public class OccupancyService {
                 .map(OccupancyHistoryEntryResponse::from)
                 .toList();
 
-        Optional<OccupancyEntity> current = occupancies.stream()
+        Optional<OccupancyEntity> active = occupancies.stream()
                 .filter(o -> o.getStatus() == OccupancyStatus.ACTIVE)
+                .findFirst();
+        Optional<OccupancyEntity> reserved = occupancies.stream()
+                .filter(o -> o.getStatus() == OccupancyStatus.RESERVED)
                 .findFirst();
 
         return MemberOccupancyListResponse.builder()
-                .currentOccupancy(current.map(OccupancyResponse::from).orElse(null))
+                .currentOccupancy(active.map(OccupancyResponse::from).orElse(null))
+                .reservedOccupancy(reserved.map(OccupancyResponse::from).orElse(null))
                 .occupancies(occupancies.stream().map(OccupancyResponse::from).toList())
                 .history(history)
                 .build();
@@ -267,21 +370,96 @@ public class OccupancyService {
 
     @Transactional(readOnly = true)
     public Optional<CurrentOccupancySummaryResponse> findCurrentOccupancySummary(UUID spaceId, UUID memberId) {
-        return occupancyRepository
-                .findActiveBySpaceIdAndMemberId(spaceId, memberId)
-                .map(occupancy -> CurrentOccupancySummaryResponse.builder()
-                        .targetType(occupancy.getTargetType())
-                        .buildingId(occupancy.getBuilding().getId())
-                        .buildingName(occupancy.getBuilding().getName())
-                        .floorId(occupancy.getFloor() != null ? occupancy.getFloor().getId() : null)
-                        .floorName(occupancy.getFloor() != null ? occupancy.getFloor().getName() : null)
-                        .unitId(occupancy.getUnit() != null ? occupancy.getUnit().getId() : null)
-                        .unitName(occupancy.getUnit() != null ? occupancy.getUnit().getName() : null)
-                        .roomId(occupancy.getRoom() != null ? occupancy.getRoom().getId() : null)
-                        .roomName(occupancy.getRoom() != null ? occupancy.getRoom().getName() : null)
-                        .bedId(occupancy.getBed() != null ? occupancy.getBed().getId() : null)
-                        .bedName(occupancy.getBed() != null ? occupancy.getBed().getName() : null)
-                        .build());
+        Optional<OccupancyEntity> active = occupancyRepository.findActiveBySpaceIdAndMemberId(spaceId, memberId);
+        if (active.isPresent()) {
+            return Optional.of(toSummary(active.get()));
+        }
+        return occupancyRepository.findReservedBySpaceIdAndMemberId(spaceId, memberId).map(this::toSummary);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<BedOccupantSummaryResponse> findBedOccupant(UUID bedId) {
+        return occupancyRepository.findCurrentByBedId(bedId).map(occupancy -> BedOccupantSummaryResponse.builder()
+                .occupancyId(occupancy.getId())
+                .memberId(occupancy.getMember().getId())
+                .memberName(occupancy.getMember().getFullName())
+                .occupancyStatus(occupancy.getStatus())
+                .build());
+    }
+
+    private OccupancyEntity.OccupancyEntityBuilder buildOccupancy(
+            SpaceEntity space,
+            MemberEntity member,
+            OccupancyTargetService.ResolvedTarget target,
+            UserEntity actor,
+            LocalDateTime allocatedAt,
+            OccupancyStatus status,
+            LocalDate moveInDate,
+            LocalDateTime actualMoveInAt) {
+        return OccupancyEntity.builder()
+                .space(space)
+                .member(member)
+                .targetType(target.getTargetType())
+                .building(target.getBuilding())
+                .floor(target.getFloor())
+                .unit(target.getUnit())
+                .room(target.getRoom())
+                .bed(target.getBed())
+                .allocatedAt(allocatedAt)
+                .allocatedBy(actor)
+                .moveInDate(moveInDate)
+                .actualMoveInAt(actualMoveInAt)
+                .status(status)
+                .createdBy(actor)
+                .updatedBy(actor);
+    }
+
+    private CurrentOccupancySummaryResponse toSummary(OccupancyEntity occupancy) {
+        return CurrentOccupancySummaryResponse.builder()
+                .occupancyId(occupancy.getId())
+                .occupancyStatus(occupancy.getStatus())
+                .targetType(occupancy.getTargetType())
+                .buildingId(occupancy.getBuilding().getId())
+                .buildingName(occupancy.getBuilding().getName())
+                .floorId(occupancy.getFloor() != null ? occupancy.getFloor().getId() : null)
+                .floorName(occupancy.getFloor() != null ? occupancy.getFloor().getName() : null)
+                .unitId(occupancy.getUnit() != null ? occupancy.getUnit().getId() : null)
+                .unitName(occupancy.getUnit() != null ? occupancy.getUnit().getName() : null)
+                .roomId(occupancy.getRoom() != null ? occupancy.getRoom().getId() : null)
+                .roomName(occupancy.getRoom() != null ? occupancy.getRoom().getName() : null)
+                .bedId(occupancy.getBed() != null ? occupancy.getBed().getId() : null)
+                .bedName(occupancy.getBed() != null ? occupancy.getBed().getName() : null)
+                .moveInDate(occupancy.getMoveInDate())
+                .build();
+    }
+
+    private OccupancyTargetService.ResolvedTarget toResolvedTarget(OccupancyEntity occupancy) {
+        return OccupancyTargetService.ResolvedTarget.builder()
+                .targetType(occupancy.getTargetType())
+                .building(occupancy.getBuilding())
+                .floor(occupancy.getFloor())
+                .unit(occupancy.getUnit())
+                .room(occupancy.getRoom())
+                .bed(occupancy.getBed())
+                .build();
+    }
+
+    private MemberEntity loadActiveMember(UUID spaceId, UUID memberId) {
+        return memberRepository.findByIdAndSpaceIdAndActiveTrue(memberId, spaceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Member", "id", memberId));
+    }
+
+    private void assertMemberHasNoCurrentOccupancy(UUID spaceId, UUID memberId) {
+        if (occupancyRepository.existsBySpaceIdAndMemberIdAndStatus(spaceId, memberId, OccupancyStatus.ACTIVE)
+                || occupancyRepository.existsBySpaceIdAndMemberIdAndStatus(spaceId, memberId, OccupancyStatus.RESERVED)) {
+            throw new BusinessException("Member already has an active or reserved occupancy in this space");
+        }
+    }
+
+    private void validateMoveInDateForReserve(LocalDate moveInDate) {
+        if (moveInDate.isBefore(LocalDate.now())) {
+            throw new BusinessException("Move-in date cannot be in the past");
+        }
     }
 
     private OccupancyEntity loadActiveOccupancy(UUID spaceId, UUID occupancyId) {
@@ -289,6 +467,15 @@ public class OccupancyService {
                 .orElseThrow(() -> new ResourceNotFoundException("Occupancy", "id", occupancyId));
         if (occupancy.getStatus() != OccupancyStatus.ACTIVE) {
             throw new BusinessException("Occupancy is not active");
+        }
+        return occupancy;
+    }
+
+    private OccupancyEntity loadReservedOccupancy(UUID spaceId, UUID occupancyId) {
+        OccupancyEntity occupancy = occupancyRepository.findByIdAndSpaceId(occupancyId, spaceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Occupancy", "id", occupancyId));
+        if (occupancy.getStatus() != OccupancyStatus.RESERVED) {
+            throw new BusinessException("Occupancy is not reserved");
         }
         return occupancy;
     }
@@ -304,21 +491,39 @@ public class OccupancyService {
         occupancyRepository.save(occupancy);
     }
 
-    private void assertTargetAvailable(OccupancyTargetService.ResolvedTarget target) {
+    private void refreshMemberOccupancyStatus(MemberEntity member, UUID spaceId) {
+        if (occupancyRepository.existsBySpaceIdAndMemberIdAndStatus(spaceId, member.getId(), OccupancyStatus.ACTIVE)) {
+            member.setOccupancyStatus(MemberOccupancyStatus.ALLOCATED);
+        } else if (occupancyRepository.existsBySpaceIdAndMemberIdAndStatus(
+                spaceId, member.getId(), OccupancyStatus.RESERVED)) {
+            member.setOccupancyStatus(MemberOccupancyStatus.RESERVED);
+        } else {
+            member.setOccupancyStatus(MemberOccupancyStatus.VACATED);
+        }
+        memberRepository.save(member);
+    }
+
+    private void assertTargetNotHeld(OccupancyTargetService.ResolvedTarget target) {
         switch (target.getTargetType()) {
             case BED -> {
-                if (occupancyRepository.existsByBedIdAndStatus(target.getBed().getId(), OccupancyStatus.ACTIVE)) {
-                    throw new BusinessException("Bed is already occupied");
+                UUID bedId = target.getBed().getId();
+                if (occupancyRepository.existsByBedIdAndStatus(bedId, OccupancyStatus.ACTIVE)
+                        || occupancyRepository.existsByBedIdAndStatus(bedId, OccupancyStatus.RESERVED)) {
+                    throw new BusinessException("Bed is not available");
                 }
             }
             case ROOM -> {
-                if (occupancyRepository.existsByRoomIdAndStatus(target.getRoom().getId(), OccupancyStatus.ACTIVE)) {
-                    throw new BusinessException("Room is already occupied");
+                UUID roomId = target.getRoom().getId();
+                if (occupancyRepository.existsByRoomIdAndStatus(roomId, OccupancyStatus.ACTIVE)
+                        || occupancyRepository.existsByRoomIdAndStatus(roomId, OccupancyStatus.RESERVED)) {
+                    throw new BusinessException("Room is not available");
                 }
             }
             case UNIT -> {
-                if (occupancyRepository.existsByUnitIdAndStatus(target.getUnit().getId(), OccupancyStatus.ACTIVE)) {
-                    throw new BusinessException("Unit is already occupied");
+                UUID unitId = target.getUnit().getId();
+                if (occupancyRepository.existsByUnitIdAndStatus(unitId, OccupancyStatus.ACTIVE)
+                        || occupancyRepository.existsByUnitIdAndStatus(unitId, OccupancyStatus.RESERVED)) {
+                    throw new BusinessException("Unit is not available");
                 }
             }
         }

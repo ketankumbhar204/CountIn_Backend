@@ -60,7 +60,7 @@ public class AccommodationDeletionPolicy {
     }
 
     private DeletionEvaluation evaluateBedNode(BedEntity bed) {
-        if (bed.getStatus() == AccommodationStatus.OCCUPIED) {
+        if (bed.getStatus() == AccommodationStatus.OCCUPIED || bed.getStatus() == AccommodationStatus.RESERVED) {
             return DeletionEvaluation.blocked("active occupancy exists");
         }
         return evaluateBedNode(bed.getId());
@@ -80,7 +80,7 @@ public class AccommodationDeletionPolicy {
     }
 
     private DeletionEvaluation evaluateRoomNode(RoomEntity room) {
-        if (room.getStatus() == AccommodationStatus.OCCUPIED) {
+        if (room.getStatus() == AccommodationStatus.OCCUPIED || room.getStatus() == AccommodationStatus.RESERVED) {
             return DeletionEvaluation.blocked("active occupancy exists");
         }
         if (occupancyPort.hasActiveOccupancyForRoom(room.getId())) {

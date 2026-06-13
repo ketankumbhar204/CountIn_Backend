@@ -50,7 +50,7 @@ public class OccupancyHistoryEntity extends BaseEntity {
     private MemberEntity member;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "event_type", nullable = false, length = 20)
+    @Column(name = "event_type", nullable = false, length = 30)
     private OccupancyHistoryEvent eventType;
 
     @Enumerated(EnumType.STRING)

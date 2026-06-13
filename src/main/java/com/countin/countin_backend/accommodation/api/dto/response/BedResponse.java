@@ -2,6 +2,7 @@ package com.countin.countin_backend.accommodation.api.dto.response;
 
 import com.countin.countin_backend.accommodation.domain.model.AccommodationStatus;
 import com.countin.countin_backend.accommodation.infrastructure.persistence.entity.BedEntity;
+import com.countin.countin_backend.occupancy.api.dto.response.BedOccupantSummaryResponse;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -22,12 +23,17 @@ public class BedResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private AccommodationActionMetadata actions;
+    private BedOccupantSummaryResponse occupant;
 
     public static BedResponse from(BedEntity bed) {
-        return from(bed, null);
+        return from(bed, null, null);
     }
 
     public static BedResponse from(BedEntity bed, AccommodationActionMetadata actions) {
+        return from(bed, actions, null);
+    }
+
+    public static BedResponse from(BedEntity bed, AccommodationActionMetadata actions, BedOccupantSummaryResponse occupant) {
         return BedResponse.builder()
                 .bedId(bed.getId())
                 .roomId(bed.getRoom().getId())
@@ -38,6 +44,7 @@ public class BedResponse {
                 .createdAt(bed.getCreatedAt())
                 .updatedAt(bed.getUpdatedAt())
                 .actions(actions)
+                .occupant(occupant)
                 .build();
     }
 }

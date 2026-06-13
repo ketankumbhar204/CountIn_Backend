@@ -20,7 +20,8 @@ public class AccommodationOccupancyAdapter implements AccommodationOccupancyPort
 
     @Override
     public boolean hasActiveOccupancyForBed(UUID bedId) {
-        return occupancyRepository.existsByBedIdAndStatus(bedId, OccupancyStatus.ACTIVE);
+        return occupancyRepository.existsByBedIdAndStatus(bedId, OccupancyStatus.ACTIVE)
+                || occupancyRepository.existsByBedIdAndStatus(bedId, OccupancyStatus.RESERVED);
     }
 
     @Override
@@ -30,7 +31,8 @@ public class AccommodationOccupancyAdapter implements AccommodationOccupancyPort
 
     @Override
     public boolean hasActiveOccupancyForRoom(UUID roomId) {
-        return occupancyRepository.existsByRoomIdAndStatus(roomId, OccupancyStatus.ACTIVE);
+        return occupancyRepository.existsByRoomIdAndStatus(roomId, OccupancyStatus.ACTIVE)
+                || occupancyRepository.existsByRoomIdAndStatus(roomId, OccupancyStatus.RESERVED);
     }
 
     @Override

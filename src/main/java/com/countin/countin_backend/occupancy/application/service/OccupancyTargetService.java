@@ -27,13 +27,58 @@ public class OccupancyTargetService {
     private final RoomRepository roomRepository;
     private final UnitRepository unitRepository;
 
-    public ResolvedTarget resolve(UUID spaceId, SpaceType spaceType, AllocationTargetType targetType, UUID bedId,
-            UUID roomId, UUID unitId) {
+    public enum TargetValidation {
+        RESERVE,
+        ALLOCATE,
+        MOVE_IN
+    }
+
+    public ResolvedTarget resolve(
+            UUID spaceId,
+            SpaceType spaceType,
+            AllocationTargetType targetType,
+            UUID bedId,
+            UUID roomId,
+            UUID unitId) {
+        return resolve(spaceId, spaceType, targetType, bedId, roomId, unitId, TargetValidation.ALLOCATE, false);
+    }
+
+    public ResolvedTarget resolveForReserve(
+            UUID spaceId,
+            SpaceType spaceType,
+            AllocationTargetType targetType,
+            UUID bedId,
+            UUID roomId,
+            UUID unitId) {
+        return resolve(spaceId, spaceType, targetType, bedId, roomId, unitId, TargetValidation.RESERVE, false);
+    }
+
+    public ResolvedTarget resolveForMoveIn(
+            UUID spaceId,
+            SpaceType spaceType,
+            AllocationTargetType targetType,
+            UUID bedId,
+            UUID roomId,
+            UUID unitId,
+            boolean reservedForSameMember) {
+        return resolve(
+                spaceId, spaceType, targetType, bedId, roomId, unitId, TargetValidation.MOVE_IN, reservedForSameMember);
+    }
+
+    public ResolvedTarget resolve(
+            UUID spaceId,
+            SpaceType spaceType,
+            AllocationTargetType targetType,
+            UUID bedId,
+            UUID roomId,
+            UUID unitId,
+            TargetValidation validation,
+            boolean reservedForSameMember) {
         assertTargetTypeAllowed(spaceType, targetType);
         return switch (targetType) {
-            case BED -> resolveBed(spaceId, requireId(bedId, "bedId"));
-            case ROOM -> resolveRoom(spaceId, requireId(roomId, "roomId"));
-            case UNIT -> resolveUnit(spaceId, requireId(unitId, "unitId"));
+            case BED -> resolveBed(spaceId, requireId(bedId, "bedId"), validation, reservedForSameMember);
+            case ROOM -> resolveRoom(spaceId, requireId(roomId, "roomId"), validation, reservedForSameMember);
+            case UNIT -> resolveUnit(spaceId, requireId(unitId, "unitId"), validation, reservedForSameMember);
         };
     }
 
@@ -58,13 +103,46 @@ public class OccupancyTargetService {
         }
     }
 
-    private ResolvedTarget resolveBed(UUID spaceId, UUID bedId) {
+    public void assertReservable(AccommodationStatus status, String label) {
+        assertNotBlocked(status, label);
+        if (status != AccommodationStatus.AVAILABLE) {
+            throw new BusinessException(label + " is not available for reservation");
+        }
+    }
+
+    public void assertMoveInTarget(AccommodationStatus status, String label, boolean reservedForSameMember) {
+        assertNotBlocked(status, label);
+        if (status == AccommodationStatus.AVAILABLE) {
+            return;
+        }
+        if (status == AccommodationStatus.RESERVED && reservedForSameMember) {
+            return;
+        }
+        throw new BusinessException(label + " is not available for move-in");
+    }
+
+    private void validateStatus(
+            AccommodationStatus status, String label, TargetValidation validation, boolean reservedForSameMember) {
+        switch (validation) {
+            case RESERVE, ALLOCATE -> assertReservable(status, label);
+            case MOVE_IN -> assertMoveInTarget(status, label, reservedForSameMember);
+        }
+    }
+
+    private void assertNotBlocked(AccommodationStatus status, String label) {
+        if (status == AccommodationStatus.MAINTENANCE || status == AccommodationStatus.BLOCKED) {
+            throw new BusinessException(label + " is not available (status: " + status + ")");
+        }
+    }
+
+    private ResolvedTarget resolveBed(
+            UUID spaceId, UUID bedId, TargetValidation validation, boolean reservedForSameMember) {
         BedEntity bed = bedRepository.findByIdAndSpaceId(bedId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Bed", bedId));
         if (!bed.isActive()) {
             throw new BusinessException("Bed is not active");
         }
-        assertAllocatable(bed.getStatus(), "Bed");
+        validateStatus(bed.getStatus(), "Bed", validation, reservedForSameMember);
 
         RoomEntity room = bed.getRoom();
         if (room == null || !room.isActive()) {
@@ -98,13 +176,15 @@ public class OccupancyTargetService {
                 .build();
     }
 
-    private ResolvedTarget resolveRoom(UUID spaceId, UUID roomId) {
+    private ResolvedTarget resolveRoom(
+            UUID spaceId, UUID roomId, TargetValidation validation, boolean reservedForSameMember) {
+        // Room allocation rules are not finalized. Keep implementation; do not expand. Future billing review required.
         RoomEntity room = roomRepository.findByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));
         if (!room.isActive()) {
             throw new BusinessException("Room is not active");
         }
-        assertAllocatable(room.getStatus(), "Room");
+        validateStatus(room.getStatus(), "Room", validation, reservedForSameMember);
 
         BuildingEntity building;
         FloorEntity floor = null;
@@ -132,13 +212,14 @@ public class OccupancyTargetService {
                 .build();
     }
 
-    private ResolvedTarget resolveUnit(UUID spaceId, UUID unitId) {
+    private ResolvedTarget resolveUnit(
+            UUID spaceId, UUID unitId, TargetValidation validation, boolean reservedForSameMember) {
         UnitEntity unit = unitRepository.findByIdAndSpaceId(unitId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", unitId));
         if (!unit.isActive()) {
             throw new BusinessException("Unit is not active");
         }
-        assertAllocatable(unit.getStatus(), "Unit");
+        validateStatus(unit.getStatus(), "Unit", validation, reservedForSameMember);
         assertBuildingInSpace(unit.getBuilding(), spaceId);
 
         return ResolvedTarget.builder()
@@ -147,12 +228,6 @@ public class OccupancyTargetService {
                 .floor(unit.getFloor())
                 .unit(unit)
                 .build();
-    }
-
-    private void assertAllocatable(AccommodationStatus status, String label) {
-        if (status != AccommodationStatus.AVAILABLE) {
-            throw new BusinessException(label + " is not available for allocation");
-        }
     }
 
     private void assertBuildingInSpace(BuildingEntity building, UUID spaceId) {

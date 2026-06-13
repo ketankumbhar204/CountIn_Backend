@@ -27,6 +27,8 @@ import com.countin.countin_backend.accommodation.infrastructure.persistence.repo
 import com.countin.countin_backend.accommodation.infrastructure.persistence.repository.FloorRepository;
 import com.countin.countin_backend.accommodation.infrastructure.persistence.repository.RoomRepository;
 import com.countin.countin_backend.accommodation.infrastructure.persistence.repository.UnitRepository;
+import com.countin.countin_backend.occupancy.application.service.OccupancyService;
+import com.countin.countin_backend.occupancy.infrastructure.persistence.repository.OccupancyRepository;
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.domain.model.MembershipStatus;
@@ -82,6 +84,12 @@ class AccommodationStructureServiceTest {
     @Mock
     private AccommodationActionService actionService;
 
+    @Mock
+    private OccupancyService occupancyService;
+
+    @Mock
+    private OccupancyRepository occupancyRepository;
+
     @InjectMocks
     private AccommodationAccessService accessService;
 
@@ -135,7 +143,8 @@ class AccommodationStructureServiceTest {
                 actionService,
                 layoutService,
                 syntheticUnitService);
-        bedService = new BedService(bedRepository, roomRepository, accessService, profileService, actionService);
+        bedService = new BedService(
+                bedRepository, roomRepository, accessService, profileService, actionService, occupancyService, occupancyRepository);
 
         spaceId = UUID.randomUUID();
         ownerId = UUID.randomUUID();

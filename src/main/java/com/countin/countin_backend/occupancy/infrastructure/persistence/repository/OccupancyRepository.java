@@ -42,6 +42,31 @@ public interface OccupancyRepository extends JpaRepository<OccupancyEntity, UUID
     Optional<OccupancyEntity> findActiveBySpaceIdAndMemberId(
             @Param("spaceId") UUID spaceId, @Param("memberId") UUID memberId);
 
+    @Query("""
+            SELECT o FROM OccupancyEntity o
+            JOIN FETCH o.member
+            JOIN FETCH o.building
+            LEFT JOIN FETCH o.floor
+            LEFT JOIN FETCH o.unit
+            LEFT JOIN FETCH o.room
+            LEFT JOIN FETCH o.bed
+            WHERE o.space.id = :spaceId
+              AND o.member.id = :memberId
+              AND o.status = com.countin.countin_backend.occupancy.domain.model.OccupancyStatus.RESERVED
+            """)
+    Optional<OccupancyEntity> findReservedBySpaceIdAndMemberId(
+            @Param("spaceId") UUID spaceId, @Param("memberId") UUID memberId);
+
+    @Query("""
+            SELECT o FROM OccupancyEntity o
+            JOIN FETCH o.member
+            WHERE o.bed.id = :bedId
+              AND o.status IN (
+                  com.countin.countin_backend.occupancy.domain.model.OccupancyStatus.ACTIVE,
+                  com.countin.countin_backend.occupancy.domain.model.OccupancyStatus.RESERVED)
+            """)
+    Optional<OccupancyEntity> findCurrentByBedId(@Param("bedId") UUID bedId);
+
     boolean existsBySpaceIdAndMemberIdAndStatus(UUID spaceId, UUID memberId, OccupancyStatus status);
 
     boolean existsByBedIdAndStatus(UUID bedId, OccupancyStatus status);

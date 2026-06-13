@@ -10,6 +10,9 @@ import com.countin.countin_backend.accommodation.infrastructure.persistence.repo
 import com.countin.countin_backend.accommodation.infrastructure.persistence.repository.RoomRepository;
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.occupancy.application.service.OccupancyService;
+import com.countin.countin_backend.occupancy.domain.model.OccupancyStatus;
+import com.countin.countin_backend.occupancy.infrastructure.persistence.repository.OccupancyRepository;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +30,8 @@ public class BedService {
     private final AccommodationAccessService accessService;
     private final AccommodationProfileService profileService;
     private final AccommodationActionService actionService;
+    private final OccupancyService occupancyService;
+    private final OccupancyRepository occupancyRepository;
 
     @Transactional
     public BedResponse createBed(
@@ -85,7 +90,10 @@ public class BedService {
         BedEntity bed = bedRepository.findActiveByIdAndRoomId(bedId, roomId)
                 .orElseThrow(() -> new ResourceNotFoundException("Bed", "id", bedId));
 
-        return BedResponse.from(bed, actionService.forBed(spaceId, bed, callerId));
+        return BedResponse.from(
+                bed,
+                actionService.forBed(spaceId, bed, callerId),
+                occupancyService.findBedOccupant(bedId).orElse(null));
     }
 
     @Transactional(readOnly = true)
@@ -95,7 +103,10 @@ public class BedService {
         BedEntity bed = bedRepository.findByIdAndSpaceId(bedId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Bed", bedId));
 
-        return BedResponse.from(bed, actionService.forBed(spaceId, bed, callerId));
+        return BedResponse.from(
+                bed,
+                actionService.forBed(spaceId, bed, callerId),
+                occupancyService.findBedOccupant(bedId).orElse(null));
     }
 
     @Transactional
@@ -120,6 +131,10 @@ public class BedService {
 
         bed.setName(request.getName());
         bed.setBedNumber(request.getBedNumber());
+        if (request.getStatus() == AccommodationStatus.MAINTENANCE
+                || request.getStatus() == AccommodationStatus.BLOCKED) {
+            assertNoBlockingOccupancy(bedId);
+        }
         bed.setStatus(request.getStatus());
 
         return BedResponse.from(bedRepository.save(bed));
@@ -147,5 +162,12 @@ public class BedService {
 
         bed.setActive(false);
         bedRepository.save(bed);
+    }
+
+    private void assertNoBlockingOccupancy(UUID bedId) {
+        if (occupancyRepository.existsByBedIdAndStatus(bedId, OccupancyStatus.ACTIVE)
+                || occupancyRepository.existsByBedIdAndStatus(bedId, OccupancyStatus.RESERVED)) {
+            throw new BusinessException("Cannot change bed status while an active or reserved occupancy exists");
+        }
     }
 }

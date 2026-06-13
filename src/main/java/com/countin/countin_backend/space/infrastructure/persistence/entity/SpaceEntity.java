@@ -1,6 +1,7 @@
 package com.countin.countin_backend.space.infrastructure.persistence.entity;
 
 import com.countin.countin_backend.common.model.BaseEntity;
+import com.countin.countin_backend.space.domain.model.GenderPolicy;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
 import jakarta.persistence.Column;
@@ -49,4 +50,8 @@ public class SpaceEntity extends BaseEntity {
     @Builder.Default
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender_policy", length = 20)
+    private GenderPolicy genderPolicy;
 }

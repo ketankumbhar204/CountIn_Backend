@@ -70,10 +70,13 @@ public class AccommodationSummaryService {
         return AvailabilityCountsResponse.builder()
                 .availableBeds(summaryRepository.countBedsByStatus(buildingId, AccommodationStatus.AVAILABLE))
                 .occupiedBeds(summaryRepository.countBedsByStatus(buildingId, AccommodationStatus.OCCUPIED))
+                .reservedBeds(summaryRepository.countBedsByStatus(buildingId, AccommodationStatus.RESERVED))
                 .availableRooms(summaryRepository.countRoomsByStatus(buildingId, AccommodationStatus.AVAILABLE))
                 .occupiedRooms(summaryRepository.countRoomsByStatus(buildingId, AccommodationStatus.OCCUPIED))
+                .reservedRooms(summaryRepository.countRoomsByStatus(buildingId, AccommodationStatus.RESERVED))
                 .availableUnits(summaryRepository.countUnitsByStatus(buildingId, AccommodationStatus.AVAILABLE))
                 .occupiedUnits(summaryRepository.countUnitsByStatus(buildingId, AccommodationStatus.OCCUPIED))
+                .reservedUnits(summaryRepository.countUnitsByStatus(buildingId, AccommodationStatus.RESERVED))
                 .build();
     }
 
