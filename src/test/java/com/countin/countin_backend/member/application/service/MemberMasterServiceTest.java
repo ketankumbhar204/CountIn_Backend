@@ -37,6 +37,7 @@ import com.countin.countin_backend.member.infrastructure.persistence.repository.
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberNoteRepository;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.SpaceMembershipRepository;
+import com.countin.countin_backend.occupancy.application.service.OccupancyService;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
@@ -78,6 +79,9 @@ class MemberMasterServiceTest {
 
     @Mock
     private SpaceMembershipRepository spaceMembershipRepository;
+
+    @Mock
+    private OccupancyService occupancyService;
 
     @InjectMocks
     private MemberMasterService memberMasterService;
@@ -164,6 +168,7 @@ class MemberMasterServiceTest {
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
         when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndStatus(
                 ownerId, spaceId, MembershipStatus.ACTIVE)).thenReturn(true);
+        when(spaceMembershipRepository.findActiveMembers(spaceId)).thenReturn(List.of());
         when(memberRepository.findBySpaceIdAndActiveTrue(spaceId)).thenReturn(List.of(member));
 
         List<MemberResponse> members = memberMasterService.getMembers(spaceId, ownerId);

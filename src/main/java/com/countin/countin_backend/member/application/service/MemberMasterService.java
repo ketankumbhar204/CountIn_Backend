@@ -28,6 +28,7 @@ import com.countin.countin_backend.member.infrastructure.persistence.repository.
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberNoteRepository;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.SpaceMembershipRepository;
+import com.countin.countin_backend.occupancy.application.service.OccupancyService;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
 import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
@@ -55,6 +56,7 @@ public class MemberMasterService {
     private final MemberHistoryRepository memberHistoryRepository;
     private final UserRepository userRepository;
     private final SpaceMembershipRepository spaceMembershipRepository;
+    private final OccupancyService occupancyService;
 
     @Transactional
     public MemberResponse createMember(UUID spaceId, UUID callerId, CreateMemberRequest request) {
@@ -92,17 +94,37 @@ public class MemberMasterService {
         return MemberResponse.from(member);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<MemberResponse> getMembers(UUID spaceId, UUID callerId) {
         log.info("Fetching members: spaceId={}, callerId={}", spaceId, callerId);
 
         assertSpaceExists(spaceId);
         assertCallerBelongsToSpace(spaceId, callerId);
+        syncOwnerManagerMembershipRecords(spaceId);
 
         return memberRepository.findBySpaceIdAndActiveTrue(spaceId)
                 .stream()
                 .map(MemberResponse::from)
                 .toList();
+    }
+
+    /**
+     * Ensures active OWNER/MANAGER app memberships also appear in the member master list.
+     * Backfills legacy spaces where only space_memberships existed.
+     */
+    @Transactional
+    public void syncOwnerManagerMembershipRecords(UUID spaceId) {
+        for (SpaceMembershipEntity membership : spaceMembershipRepository.findActiveMembers(spaceId)) {
+            MembershipRole role = membership.getRole();
+            if (role != MembershipRole.OWNER && role != MembershipRole.MANAGER) {
+                continue;
+            }
+            UserEntity user = membership.getUser();
+            if (user == null) {
+                continue;
+            }
+            linkMemberToMembership(membership, user.getFullName(), user.getMobileNumber());
+        }
     }
 
     @Transactional(readOnly = true)
@@ -116,7 +138,7 @@ public class MemberMasterService {
         MemberEntity member = memberRepository.findByIdAndSpaceIdAndActiveTrue(memberId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Member", "id", memberId));
 
-        return MemberDetailsResponse.from(member);
+        return toMemberDetails(member);
     }
 
     @Transactional
@@ -528,5 +550,13 @@ public class MemberMasterService {
             throw new BusinessException(
                     "Only OWNER or MANAGER can perform this action", HttpStatus.FORBIDDEN);
         }
+    }
+
+    private MemberDetailsResponse toMemberDetails(MemberEntity member) {
+        return MemberDetailsResponse.from(
+                member,
+                occupancyService
+                        .findCurrentOccupancySummary(member.getSpace().getId(), member.getId())
+                        .orElse(null));
     }
 }

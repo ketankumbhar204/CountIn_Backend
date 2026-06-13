@@ -871,3 +871,4 @@ export function useMembers(spaceId: string | null) {
 - [space-ui-integration.md](./space-ui-integration.md) — Space management
 - [member-master-module.md](./member-master-module.md) — Backend spec
 - [domain-model.md](./domain-model.md) — Domain rules
+accommodation-flow-redesign.md

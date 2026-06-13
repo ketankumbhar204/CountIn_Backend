@@ -3,6 +3,7 @@ package com.countin.countin_backend.member.infrastructure.persistence.entity;
 import com.countin.countin_backend.common.model.BaseEntity;
 import com.countin.countin_backend.member.domain.model.MemberStatus;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
+import com.countin.countin_backend.occupancy.domain.model.MemberOccupancyStatus;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
 import jakarta.persistence.Column;
@@ -79,6 +80,11 @@ public class MemberEntity extends BaseEntity {
 
     @Column(name = "emergency_contact_mobile", length = 15)
     private String emergencyContactMobile;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "occupancy_status", nullable = false, length = 20)
+    private MemberOccupancyStatus occupancyStatus = MemberOccupancyStatus.VACATED;
 
     @Builder.Default
     @Column(name = "deposit_amount", nullable = false, precision = 12, scale = 2)

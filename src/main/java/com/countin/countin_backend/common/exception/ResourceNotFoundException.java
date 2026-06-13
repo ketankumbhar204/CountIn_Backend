@@ -9,4 +9,9 @@ public class ResourceNotFoundException extends RuntimeException {
     public ResourceNotFoundException(String message) {
         super(message);
     }
+
+    public static ResourceNotFoundException notInSpace(String resource, Object id) {
+        return new ResourceNotFoundException(
+                String.format("%s not found in this space with id: '%s'", resource, id));
+    }
 }

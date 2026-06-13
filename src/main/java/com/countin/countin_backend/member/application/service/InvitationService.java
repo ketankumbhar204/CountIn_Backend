@@ -6,6 +6,7 @@ import com.countin.countin_backend.member.api.dto.request.CreateInvitationReques
 import com.countin.countin_backend.member.api.dto.response.InvitationResponse;
 import com.countin.countin_backend.member.api.dto.response.SpaceMembershipResponse;
 import com.countin.countin_backend.member.domain.model.InvitationStatus;
+import com.countin.countin_backend.member.application.service.MemberMasterService;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.domain.model.MembershipStatus;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.InvitationEntity;
@@ -34,6 +35,7 @@ public class InvitationService {
     private final SpaceMembershipRepository spaceMembershipRepository;
     private final SpaceRepository spaceRepository;
     private final UserRepository userRepository;
+    private final MemberMasterService memberMasterService;
 
     @Transactional
     public InvitationResponse createInvitation(CreateInvitationRequest request) {
@@ -115,6 +117,12 @@ public class InvitationService {
         invitation.setStatus(InvitationStatus.ACCEPTED);
         invitation.setAcceptedAt(LocalDateTime.now());
         invitationRepository.save(invitation);
+
+        if (membership.getRole() == MembershipRole.OWNER
+                || membership.getRole() == MembershipRole.MANAGER) {
+            memberMasterService.linkMemberToMembership(
+                    membership, user.getFullName(), user.getMobileNumber());
+        }
 
         return SpaceMembershipResponse.from(membership);
     }

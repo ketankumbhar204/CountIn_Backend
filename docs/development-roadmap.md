@@ -13,7 +13,7 @@
 
 ---
 
-## Phase 2 - Spaces Module (Current Focus)
+## Phase 2 - Spaces Module
 
 ### Space Management
 
@@ -51,7 +51,10 @@
 * Notifications
 * Language Settings
 * Space Archive / Deactivate
+
 ---
+
+## Phase 3 - Members Module
 
 ### Member Management
 
@@ -93,9 +96,9 @@
 
 ---
 
-# Phase 4 - Accommodation Management
+## Phase 4 - Accommodation Management (Current Focus)
 
-## Goal
+### Goal
 
 Manage physical accommodation structure and occupancy across:
 
@@ -106,473 +109,99 @@ Manage physical accommodation structure and occupancy across:
 
 Mess spaces do not use Accommodation Management.
 
----
+### Structure UI
 
-# Property Structure
+* ✅ Inline name edit on list rows (building, floor, unit, room, bed)
+* Full edit screens kept for other fields
 
-## Buildings
+### Property Structure
 
-Represents a physical building.
-
-Examples:
-
-* Building A
-* Building B
-* Tower 1
-
-Features:
+#### Buildings
 
 * Create Building
 * Edit Building
 * View Building
 * Deactivate Building
 
----
-
-## Floors
-
-Represents a floor inside a building.
-
-Examples:
-
-* Ground Floor
-* First Floor
-* Second Floor
-
-Features:
+#### Floors
 
 * Create Floor
 * Edit Floor
 * View Floor
 * Deactivate Floor
 
----
-
-## Units
-
-Represents an apartment, flat, suite, or independent unit.
-
-Examples:
-
-* Flat 101
-* Flat 202
-* Studio A
-
-Features:
+#### Units
 
 * Create Unit
 * Edit Unit
 * View Unit
 * Deactivate Unit
 
----
-
-## Rooms
-
-Represents a room inside a floor or unit.
-
-Examples:
-
-* Room 101
-* Room 102
-* Bedroom A
-
-Features:
+#### Rooms
 
 * Create Room
 * Edit Room
 * View Room
 * Deactivate Room
 
----
-
-## Beds
-
-Represents individual occupancy slots.
-
-Examples:
-
-* Bed A
-* Bed B
-* Bed C
-
-Features:
+#### Beds
 
 * Create Bed
 * Edit Bed
 * View Bed
 * Deactivate Bed
 
----
+### Space Type Rules
 
-# Space Type Rules
+#### PG / Hostel
 
-## PG
+Building → Floor → Room → Bed · Member → Bed
 
-Structure:
+#### Co-Living
 
-Building
-→ Floor
-→ Room
-→ Bed
+Building → Unit → Room → Bed · Member → Bed or Room
 
-Occupancy:
+#### Rental
 
-Member → Bed
+Building → Unit (optional Room) · Member → Unit
 
----
+#### Mess
 
-## Hostel
+Accommodation not applicable (Members, Meals, Availability, Billing)
 
-Structure:
+### Occupancy Management ✅
 
-Building
-→ Floor
-→ Room
-→ Bed
+* Allocate Member (Bed / Room / Unit by space type)
+* Transfer Member
+* Vacate Member
+* Occupancy history
 
-Occupancy:
+### Availability Management
 
-Member → Bed
+* Available / Occupied beds & rooms
+* Vacant units
 
----
+### Accommodation Status
 
-## Co-Living
+Available · Occupied · Reserved · Maintenance · Blocked
 
-Structure:
+### Capacity, Dashboard & Search
 
-Building
-→ Unit
-→ Room
-→ Bed
+* Room & bed capacity
+* Structure & occupancy metrics
+* Filter by building, floor, unit, room, status
 
-Occupancy:
+### Permissions
 
-Member → Bed
+* OWNER — full access
+* MANAGER — operate, no structure delete
+* TENANT — own allocation read-only
+* CUSTOMER — no access
+* STAFF — limited read
 
-or
+### Out of Scope (Phase 4)
 
-Member → Room
-
----
-
-## Rental
-
-Structure:
-
-Building
-→ Unit
-
-Optional:
-
-Building
-→ Unit
-→ Room
-
-Occupancy:
-
-Member → Unit
-
----
-
-## Mess
-
-Accommodation Module Not Applicable
-
-Supported Modules:
-
-* Members
-* Meals
-* Availability
-* Billing
-
----
-
-# Occupancy Management
-
-## Allocate Member
-
-Assign member to:
-
-* Bed
-* Room
-* Unit
-
-depending on Space Type.
-
-Features:
-
-* Allocate Member
-* View Allocation
-* Allocation History
-
----
-
-## Transfer Member
-
-Move member between:
-
-* Bed to Bed
-* Room to Room
-* Unit to Unit
-
-Features:
-
-* Internal Transfer
-* Transfer History
-
----
-
-## Vacate Member
-
-Mark accommodation as vacated.
-
-Features:
-
-* Vacate Date
-* Vacate Reason
-* Auto Availability Update
-
----
-
-## Occupancy History
-
-Track:
-
-* Allocation Date
-* Transfer Date
-* Vacate Date
-* Previous Location
-* New Location
-
-Purpose:
-
-Audit trail of accommodation movement.
-
----
-
-# Availability Management
-
-## Available Beds
-
-List all available beds.
-
-Filters:
-
-* Building
-* Floor
-* Room
-
----
-
-## Occupied Beds
-
-List all occupied beds.
-
----
-
-## Available Rooms
-
-List rooms with available capacity.
-
----
-
-## Occupied Rooms
-
-List fully occupied rooms.
-
----
-
-## Vacant Units
-
-List units without occupants.
-
----
-
-# Accommodation Status
-
-Supported Statuses:
-
-## AVAILABLE
-
-Ready for allocation.
-
----
-
-## OCCUPIED
-
-Currently occupied.
-
----
-
-## RESERVED
-
-Blocked for future allocation.
-
----
-
-## MAINTENANCE
-
-Unavailable due to maintenance.
-
-Examples:
-
-* Painting
-* Plumbing
-* Repairs
-
----
-
-## BLOCKED
-
-Unavailable for business reasons.
-
-Examples:
-
-* Owner Use
-* Renovation
-* Administrative Block
-
----
-
-# Capacity Management
-
-## Room Capacity
-
-Examples:
-
-* Single Sharing
-* Double Sharing
-* Triple Sharing
-* Four Sharing
-
-Track:
-
-* Total Capacity
-* Occupied Capacity
-* Available Capacity
-
----
-
-## Bed Capacity
-
-Track:
-
-* Total Beds
-* Occupied Beds
-* Available Beds
-
----
-
-# Dashboard Metrics
-
-Display:
-
-* Total Buildings
-
-* Total Floors
-
-* Total Units
-
-* Total Rooms
-
-* Total Beds
-
-* Occupied Beds
-
-* Available Beds
-
-* Occupancy Percentage
-
-* Vacant Rooms
-
-* Vacant Units
-
----
-
-# Search & Filters
-
-Support filtering by:
-
-* Building
-* Floor
-* Unit
-* Room
-* Status
-
-Search by:
-
-* Room Number
-* Unit Number
-* Member Name
-
----
-
-# Permissions
-
-## OWNER
-
-Full Access
-
-* Create
-* Edit
-* Delete
-* Allocate
-* Transfer
-* Vacate
-
----
-
-## MANAGER
-
-Operational Access
-
-* Allocate
-* Transfer
-* Vacate
-* View
-
-Cannot delete structures.
-
----
-
-## TENANT
-
-Read-only
-
-Own Allocation Only
-
----
-
-## CUSTOMER
-
-No Accommodation Access
-
----
-
-## STAFF
-
-Limited Read Access
-
-Based on future requirements.
-
----
-
-# Out Of Scope
-
-Not part of Phase 4:
-
-* Rent Collection
-* Billing
-* Payments
-* Deposits
-* Meal Management
-* Availability Polls
-* Complaints
-* Maintenance Tickets
-
-These belong to future phases.
-
+Rent, billing, payments, deposits, meals, availability polls, complaints, maintenance tickets
 
 ---
 

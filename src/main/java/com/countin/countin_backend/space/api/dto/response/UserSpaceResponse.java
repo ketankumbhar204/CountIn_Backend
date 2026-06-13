@@ -17,6 +17,9 @@ public class UserSpaceResponse {
     private UUID spaceId;
     private String spaceName;
 
+    @Schema(description = "Space address; use to disambiguate spaces with the same name")
+    private String address;
+
     @Schema(description = "Space category", implementation = SpaceType.class)
     private SpaceType spaceType;
 
@@ -29,6 +32,7 @@ public class UserSpaceResponse {
         return UserSpaceResponse.builder()
                 .spaceId(membership.getSpace().getId())
                 .spaceName(membership.getSpace().getName())
+                .address(membership.getSpace().getAddress())
                 .spaceType(membership.getSpace().getType())
                 .membershipRole(membership.getRole())
                 .joinedAt(membership.getJoinedAt())

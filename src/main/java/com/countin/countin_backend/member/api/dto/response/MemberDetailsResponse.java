@@ -3,6 +3,8 @@ package com.countin.countin_backend.member.api.dto.response;
 import com.countin.countin_backend.member.domain.model.MemberStatus;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
+import com.countin.countin_backend.occupancy.api.dto.response.CurrentOccupancySummaryResponse;
+import com.countin.countin_backend.occupancy.domain.model.MemberOccupancyStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -36,6 +38,12 @@ public class MemberDetailsResponse {
     @Schema(description = "Operational member status (distinct from soft-delete isActive)")
     private MemberStatus status;
 
+    @Schema(description = "Whether the member currently holds an accommodation allocation")
+    private MemberOccupancyStatus occupancyStatus;
+
+    @Schema(description = "Current accommodation assignment when occupancyStatus is ALLOCATED")
+    private CurrentOccupancySummaryResponse currentOccupancy;
+
     private LocalDateTime statusUpdatedAt;
     private String emergencyContactName;
     private String emergencyContactRelation;
@@ -51,6 +59,11 @@ public class MemberDetailsResponse {
     private LocalDateTime updatedAt;
 
     public static MemberDetailsResponse from(MemberEntity member) {
+        return from(member, null);
+    }
+
+    public static MemberDetailsResponse from(
+            MemberEntity member, CurrentOccupancySummaryResponse currentOccupancy) {
         BigDecimal depositBalance = member.getDepositPaid().subtract(member.getDepositRefunded());
         return MemberDetailsResponse.builder()
                 .memberId(member.getId())
@@ -63,6 +76,8 @@ public class MemberDetailsResponse {
                 .membershipId(member.getMembership() != null ? member.getMembership().getId() : null)
                 .active(member.isActive())
                 .status(member.getStatus())
+                .occupancyStatus(member.getOccupancyStatus())
+                .currentOccupancy(currentOccupancy)
                 .statusUpdatedAt(member.getStatusUpdatedAt())
                 .emergencyContactName(member.getEmergencyContactName())
                 .emergencyContactRelation(member.getEmergencyContactRelation())
