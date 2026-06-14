@@ -1,0 +1,24 @@
+package com.countin.countin_backend.meal.infrastructure.persistence.repository;
+
+import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntryEntity;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface DailyMenuEntryRepository extends JpaRepository<DailyMenuEntryEntity, UUID> {
+
+    @Query("""
+            SELECT e FROM DailyMenuEntryEntity e
+            LEFT JOIN FETCH e.combo
+            LEFT JOIN FETCH e.item
+            WHERE e.dailyMenu.id = :menuId
+            ORDER BY e.sortOrder ASC
+            """)
+    List<DailyMenuEntryEntity> findByDailyMenuId(@Param("menuId") UUID menuId);
+
+    void deleteByDailyMenuId(UUID dailyMenuId);
+}

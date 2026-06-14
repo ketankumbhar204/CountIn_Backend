@@ -27,6 +27,10 @@ public final class SpacePermissionPolicy {
                 .canViewSpaceOccupancies(owner || manager || staff)
                 .canManageMembers(ownerOrManager)
                 .canRemoveMember(owner)
+                .canManageMeals(ownerOrManager)
+                .canViewMeals(true)
+                .canManageMealParticipation(ownerOrManager)
+                .canViewOwnMealParticipation(true)
                 .build();
     }
 }

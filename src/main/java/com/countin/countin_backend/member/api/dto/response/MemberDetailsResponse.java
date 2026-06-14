@@ -1,5 +1,6 @@
 package com.countin.countin_backend.member.api.dto.response;
 
+import com.countin.countin_backend.meal.api.dto.response.MemberMealParticipationSummaryResponse;
 import com.countin.countin_backend.member.domain.model.MemberStatus;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
@@ -44,6 +45,9 @@ public class MemberDetailsResponse {
     @Schema(description = "Current accommodation assignment when occupancyStatus is ALLOCATED")
     private CurrentOccupancySummaryResponse currentOccupancy;
 
+    @Schema(description = "Active meal participation when enrolled")
+    private MemberMealParticipationSummaryResponse mealParticipation;
+
     private LocalDateTime statusUpdatedAt;
     private String emergencyContactName;
     private String emergencyContactRelation;
@@ -64,6 +68,13 @@ public class MemberDetailsResponse {
 
     public static MemberDetailsResponse from(
             MemberEntity member, CurrentOccupancySummaryResponse currentOccupancy) {
+        return from(member, currentOccupancy, null);
+    }
+
+    public static MemberDetailsResponse from(
+            MemberEntity member,
+            CurrentOccupancySummaryResponse currentOccupancy,
+            MemberMealParticipationSummaryResponse mealParticipation) {
         BigDecimal depositBalance = member.getDepositPaid().subtract(member.getDepositRefunded());
         return MemberDetailsResponse.builder()
                 .memberId(member.getId())
@@ -78,6 +89,7 @@ public class MemberDetailsResponse {
                 .status(member.getStatus())
                 .occupancyStatus(member.getOccupancyStatus())
                 .currentOccupancy(currentOccupancy)
+                .mealParticipation(mealParticipation)
                 .statusUpdatedAt(member.getStatusUpdatedAt())
                 .emergencyContactName(member.getEmergencyContactName())
                 .emergencyContactRelation(member.getEmergencyContactRelation())

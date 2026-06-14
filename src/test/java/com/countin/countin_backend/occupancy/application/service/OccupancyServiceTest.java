@@ -18,6 +18,7 @@ import com.countin.countin_backend.accommodation.infrastructure.persistence.enti
 import com.countin.countin_backend.accommodation.infrastructure.persistence.entity.FloorEntity;
 import com.countin.countin_backend.accommodation.infrastructure.persistence.entity.RoomEntity;
 import com.countin.countin_backend.common.exception.BusinessException;
+import com.countin.countin_backend.meal.application.service.MealOccupancyBridgeService;
 import com.countin.countin_backend.member.domain.model.MemberGender;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
@@ -79,6 +80,9 @@ class OccupancyServiceTest {
 
     @Mock
     private OccupancyContractSnapshotService contractSnapshotService;
+
+    @Mock
+    private MealOccupancyBridgeService mealOccupancyBridgeService;
 
     @InjectMocks
     private OccupancyService occupancyService;

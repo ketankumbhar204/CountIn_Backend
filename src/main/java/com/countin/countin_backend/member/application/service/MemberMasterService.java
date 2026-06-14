@@ -2,6 +2,7 @@ package com.countin.countin_backend.member.application.service;
 
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.meal.application.service.MealParticipationService;
 import com.countin.countin_backend.member.api.dto.request.CreateMemberDocumentRequest;
 import com.countin.countin_backend.member.api.dto.request.CreateMemberNoteRequest;
 import com.countin.countin_backend.member.api.dto.request.CreateMemberRequest;
@@ -58,6 +59,7 @@ public class MemberMasterService {
     private final UserRepository userRepository;
     private final SpaceMembershipRepository spaceMembershipRepository;
     private final OccupancyService occupancyService;
+    private final MealParticipationService mealParticipationService;
 
     @Transactional
     public MemberResponse createMember(UUID spaceId, UUID callerId, CreateMemberRequest request) {
@@ -570,10 +572,10 @@ public class MemberMasterService {
     }
 
     private MemberDetailsResponse toMemberDetails(MemberEntity member) {
+        UUID spaceId = member.getSpace().getId();
         return MemberDetailsResponse.from(
                 member,
-                occupancyService
-                        .findCurrentOccupancySummary(member.getSpace().getId(), member.getId())
-                        .orElse(null));
+                occupancyService.findCurrentOccupancySummary(spaceId, member.getId()).orElse(null),
+                mealParticipationService.findActiveSummaryForMember(spaceId, member.getId()).orElse(null));
     }
 }

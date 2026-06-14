@@ -4,6 +4,7 @@ import com.countin.countin_backend.accommodation.application.service.Accommodati
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
 import com.countin.countin_backend.common.web.PagedResponse;
+import com.countin.countin_backend.meal.application.service.MealOccupancyBridgeService;
 import com.countin.countin_backend.member.domain.model.MemberCategory;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
@@ -56,6 +57,7 @@ public class OccupancyService {
     private final AccommodationStatusSyncService accommodationStatusSyncService;
     private final GenderPolicyValidator genderPolicyValidator;
     private final OccupancyContractSnapshotService contractSnapshotService;
+    private final MealOccupancyBridgeService mealOccupancyBridgeService;
 
     @Transactional
     public OccupancyResponse reserve(UUID spaceId, UUID callerId, ReserveOccupancyRequest request) {
@@ -151,6 +153,7 @@ public class OccupancyService {
         memberRepository.save(member);
 
         recordHistory(occupancy, OccupancyHistoryEvent.MOVE_IN, targetSnapshot(occupancy), targetSnapshot(occupancy), actor, now, body.getRemarks());
+        mealOccupancyBridgeService.onOccupancyActivated(occupancy, actor, body.isCreateMealParticipation());
         return toResponse(occupancy);
     }
 
@@ -223,6 +226,7 @@ public class OccupancyService {
         memberRepository.save(member);
 
         recordHistory(occupancy, OccupancyHistoryEvent.ALLOCATED, null, targetSnapshot(target), actor, now, request.getRemarks());
+        mealOccupancyBridgeService.onOccupancyActivated(occupancy, actor, request.isCreateMealParticipation());
         return toResponse(occupancy);
     }
 
@@ -310,6 +314,7 @@ public class OccupancyService {
                 fromTarget.unitId());
 
         refreshMemberOccupancyStatus(occupancy.getMember(), spaceId);
+        mealOccupancyBridgeService.onVacate(occupancy.getMember(), actor);
 
         recordHistory(
                 occupancy,

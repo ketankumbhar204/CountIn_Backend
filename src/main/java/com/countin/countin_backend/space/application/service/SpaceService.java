@@ -2,8 +2,8 @@ package com.countin.countin_backend.space.application.service;
 
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.meal.application.service.MealSpaceSetupService;
 import com.countin.countin_backend.member.application.service.MemberMasterService;
-import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.domain.model.MembershipStatus;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
@@ -40,6 +40,7 @@ public class SpaceService {
     private final UserRepository userRepository;
     private final SpaceMembershipRepository spaceMembershipRepository;
     private final MemberMasterService memberMasterService;
+    private final MealSpaceSetupService mealSpaceSetupService;
 
     @Transactional
     public SpaceResponse createSpace(CreateSpaceRequest request) {
@@ -70,6 +71,8 @@ public class SpaceService {
         spaceMembershipRepository.save(ownerMembership);
         memberMasterService.linkMemberToMembership(
                 ownerMembership, owner.getFullName(), owner.getMobileNumber());
+
+        mealSpaceSetupService.ensureMessSampleCombos(space);
 
         return SpaceMapper.toCreateResponse(space);
     }

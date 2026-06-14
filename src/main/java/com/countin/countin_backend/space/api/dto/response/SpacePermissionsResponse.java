@@ -16,4 +16,8 @@ public class SpacePermissionsResponse {
     private boolean canViewSpaceOccupancies;
     private boolean canManageMembers;
     private boolean canRemoveMember;
+    private boolean canManageMeals;
+    private boolean canViewMeals;
+    private boolean canManageMealParticipation;
+    private boolean canViewOwnMealParticipation;
 }

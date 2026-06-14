@@ -44,4 +44,7 @@ public class AllocateOccupancyRequest {
 
     @Valid
     private List<OccupancyChargeLineRequest> otherCharges = new ArrayList<>();
+
+    @Schema(description = "Create FULL meal participation when food is enabled on allocation")
+    private boolean createMealParticipation;
 }

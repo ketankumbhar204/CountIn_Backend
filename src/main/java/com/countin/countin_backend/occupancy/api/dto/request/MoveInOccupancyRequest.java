@@ -37,4 +37,7 @@ public class MoveInOccupancyRequest {
 
     @Valid
     private List<OccupancyChargeLineRequest> otherCharges = new ArrayList<>();
+
+    @Schema(description = "Create FULL meal participation when food is enabled on move-in")
+    private boolean createMealParticipation;
 }

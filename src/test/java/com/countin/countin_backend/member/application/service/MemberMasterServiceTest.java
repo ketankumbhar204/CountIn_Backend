@@ -37,6 +37,7 @@ import com.countin.countin_backend.member.infrastructure.persistence.repository.
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberNoteRepository;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.SpaceMembershipRepository;
+import com.countin.countin_backend.meal.application.service.MealParticipationService;
 import com.countin.countin_backend.occupancy.application.service.OccupancyService;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
@@ -82,6 +83,9 @@ class MemberMasterServiceTest {
 
     @Mock
     private OccupancyService occupancyService;
+
+    @Mock
+    private MealParticipationService mealParticipationService;
 
     @InjectMocks
     private MemberMasterService memberMasterService;

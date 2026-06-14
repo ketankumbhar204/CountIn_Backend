@@ -1,0 +1,225 @@
+package com.countin.countin_backend.meal.application.service;
+
+import com.countin.countin_backend.common.exception.BusinessException;
+import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.meal.api.dto.request.CreateFoodCategoryRequest;
+import com.countin.countin_backend.meal.api.dto.request.CreateFoodItemRequest;
+import com.countin.countin_backend.meal.api.dto.request.UpdateFoodItemRequest;
+import com.countin.countin_backend.meal.api.dto.response.FoodCategoryResponse;
+import com.countin.countin_backend.meal.api.dto.response.FoodItemResponse;
+import com.countin.countin_backend.meal.domain.model.FoodScope;
+import com.countin.countin_backend.meal.infrastructure.persistence.entity.FoodCategoryEntity;
+import com.countin.countin_backend.meal.infrastructure.persistence.entity.FoodItemEntity;
+import com.countin.countin_backend.meal.infrastructure.persistence.entity.SpaceFoodCategorySettingsEntity;
+import com.countin.countin_backend.meal.infrastructure.persistence.entity.SpaceFoodItemSettingsEntity;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.FoodCategoryRepository;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.FoodItemRepository;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.SpaceFoodCategorySettingsRepository;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.SpaceFoodItemSettingsRepository;
+import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
+import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class FoodCatalogService {
+
+    private final FoodCategoryRepository foodCategoryRepository;
+    private final FoodItemRepository foodItemRepository;
+    private final SpaceFoodItemSettingsRepository spaceFoodItemSettingsRepository;
+    private final SpaceFoodCategorySettingsRepository spaceFoodCategorySettingsRepository;
+    private final SpaceRepository spaceRepository;
+    private final MealAccessService mealAccessService;
+    private final MealSpaceSetupService mealSpaceSetupService;
+
+    @Transactional
+    public List<FoodCategoryResponse> listCategories(UUID spaceId, UUID callerId) {
+        mealAccessService.requireViewMeals(spaceId, callerId);
+        SpaceEntity space = loadSpace(spaceId);
+        ensureGlobalCatalogPresent();
+        mealSpaceSetupService.ensureMessSampleCombos(space);
+        Map<UUID, Long> itemCountsByCategory = foodItemRepository.countVisibleItemsGroupedByCategory(spaceId).stream()
+                .collect(Collectors.toMap(
+                        FoodItemRepository.CategoryItemCount::getCategoryId,
+                        FoodItemRepository.CategoryItemCount::getItemCount));
+        return foodCategoryRepository.findVisibleForSpace(spaceId).stream()
+                .map(category -> FoodCategoryResponse.from(
+                        category, itemCountsByCategory.getOrDefault(category.getId(), 0L)))
+                .toList();
+    }
+
+    @Transactional
+    public FoodCategoryResponse createCategory(UUID spaceId, UUID callerId, CreateFoodCategoryRequest request) {
+        mealAccessService.requireManageMeals(spaceId, callerId);
+        SpaceEntity space = loadSpace(spaceId);
+        FoodCategoryEntity category = foodCategoryRepository.save(FoodCategoryEntity.builder()
+                .name(request.getName().trim())
+                .sortOrder(request.getSortOrder())
+                .scope(FoodScope.SPACE)
+                .space(space)
+                .isActive(true)
+                .build());
+        return FoodCategoryResponse.from(category, 0);
+    }
+
+    @Transactional(readOnly = true)
+    public List<FoodItemResponse> listItems(UUID spaceId, UUID callerId, UUID categoryId) {
+        mealAccessService.requireViewMeals(spaceId, callerId);
+        ensureGlobalCatalogPresent();
+        List<FoodItemEntity> items = categoryId == null
+                ? foodItemRepository.findAllVisibleForSpace(spaceId)
+                : foodItemRepository.findVisibleForSpaceInCategory(spaceId, categoryId);
+        return items.stream().map(FoodItemResponse::from).toList();
+    }
+
+    @Transactional
+    public FoodItemResponse createItem(UUID spaceId, UUID callerId, CreateFoodItemRequest request) {
+        mealAccessService.requireManageMeals(spaceId, callerId);
+        SpaceEntity space = loadSpace(spaceId);
+        FoodCategoryEntity category = resolveCategoryForSpaceItem(spaceId, request.getCategoryId());
+        FoodItemEntity item = foodItemRepository.save(FoodItemEntity.builder()
+                .category(category)
+                .name(request.getName().trim())
+                .scope(FoodScope.SPACE)
+                .space(space)
+                .isActive(true)
+                .isCustom(true)
+                .build());
+        return FoodItemResponse.from(foodItemRepository
+                .findByIdWithCategory(item.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("FoodItem", "id", item.getId())));
+    }
+
+    @Transactional
+    public FoodItemResponse updateItem(UUID spaceId, UUID itemId, UUID callerId, UpdateFoodItemRequest request) {
+        mealAccessService.requireManageMeals(spaceId, callerId);
+        FoodItemEntity item = foodItemRepository
+                .findSpaceItem(itemId, spaceId)
+                .orElseThrow(() -> new BusinessException("Only space custom items can be edited", HttpStatus.FORBIDDEN));
+        if (request.getCategoryId() != null) {
+            item.setCategory(resolveCategoryForSpaceItem(spaceId, request.getCategoryId()));
+        }
+        item.setName(request.getName().trim());
+        return FoodItemResponse.from(foodItemRepository.save(item));
+    }
+
+    @Transactional
+    public void deactivateCategory(UUID spaceId, UUID categoryId, UUID callerId) {
+        mealAccessService.requireManageMeals(spaceId, callerId);
+        FoodCategoryEntity category = foodCategoryRepository
+                .findById(categoryId)
+                .orElseThrow(() -> new ResourceNotFoundException("FoodCategory", "id", categoryId));
+
+        if (category.getScope() == FoodScope.GLOBAL) {
+            SpaceFoodCategorySettingsEntity settings = spaceFoodCategorySettingsRepository
+                    .findBySpaceIdAndCategoryId(spaceId, categoryId)
+                    .orElse(SpaceFoodCategorySettingsEntity.builder()
+                            .spaceId(spaceId)
+                            .categoryId(categoryId)
+                            .isEnabled(false)
+                            .updatedAt(LocalDateTime.now())
+                            .build());
+            settings.setEnabled(false);
+            settings.setUpdatedAt(LocalDateTime.now());
+            spaceFoodCategorySettingsRepository.save(settings);
+            return;
+        }
+
+        if (category.getSpace() == null || !category.getSpace().getId().equals(spaceId)) {
+            throw new BusinessException("Category does not belong to this space", HttpStatus.FORBIDDEN);
+        }
+
+        category.setActive(false);
+        foodCategoryRepository.save(category);
+        foodItemRepository.findActiveSpaceItemsInCategory(spaceId, categoryId).forEach(item -> {
+            item.setActive(false);
+            foodItemRepository.save(item);
+        });
+    }
+
+    @Transactional
+    public void deactivateItem(UUID spaceId, UUID itemId, UUID callerId) {
+        mealAccessService.requireManageMeals(spaceId, callerId);
+        FoodItemEntity item = foodItemRepository
+                .findByIdWithCategory(itemId)
+                .orElseThrow(() -> new ResourceNotFoundException("FoodItem", "id", itemId));
+
+        if (item.getScope() == FoodScope.GLOBAL) {
+            SpaceFoodItemSettingsEntity settings = spaceFoodItemSettingsRepository
+                    .findBySpaceIdAndItemId(spaceId, itemId)
+                    .orElse(SpaceFoodItemSettingsEntity.builder()
+                            .spaceId(spaceId)
+                            .itemId(itemId)
+                            .isEnabled(false)
+                            .updatedAt(LocalDateTime.now())
+                            .build());
+            settings.setEnabled(false);
+            settings.setUpdatedAt(LocalDateTime.now());
+            spaceFoodItemSettingsRepository.save(settings);
+            return;
+        }
+
+        if (item.getSpace() == null || !item.getSpace().getId().equals(spaceId)) {
+            throw new BusinessException("Item does not belong to this space", HttpStatus.FORBIDDEN);
+        }
+        item.setActive(false);
+        foodItemRepository.save(item);
+    }
+
+    public FoodItemEntity loadEnabledItemForSpace(UUID spaceId, UUID itemId) {
+        FoodItemEntity item = foodItemRepository
+                .findByIdWithCategory(itemId)
+                .orElseThrow(() -> new ResourceNotFoundException("FoodItem", "id", itemId));
+        if (!item.isActive()) {
+            throw new BusinessException("Food item is not active");
+        }
+        if (item.getScope() == FoodScope.SPACE && !item.getSpace().getId().equals(spaceId)) {
+            throw new BusinessException("Food item does not belong to this space", HttpStatus.FORBIDDEN);
+        }
+        if (item.getScope() == FoodScope.GLOBAL) {
+            spaceFoodItemSettingsRepository
+                    .findBySpaceIdAndItemId(spaceId, itemId)
+                    .filter(settings -> !settings.isEnabled())
+                    .ifPresent(settings -> {
+                        throw new BusinessException("Food item is disabled for this space");
+                    });
+        }
+        return item;
+    }
+
+    private void ensureGlobalCatalogPresent() {
+        long globalCategoryCount = foodCategoryRepository.countGlobalActive();
+        if (globalCategoryCount == 0) {
+            log.error(
+                    "Global food catalog is empty (expected 12 categories from Flyway V40/V43). "
+                            + "Menu library APIs will return empty lists until migrations are applied.");
+        }
+    }
+
+    private FoodCategoryEntity resolveCategoryForSpaceItem(UUID spaceId, UUID categoryId) {
+        return foodCategoryRepository
+                .findById(categoryId)
+                .filter(category -> category.isActive()
+                        && (category.getScope() == FoodScope.GLOBAL
+                                || (category.getScope() == FoodScope.SPACE
+                                        && category.getSpace() != null
+                                        && category.getSpace().getId().equals(spaceId))))
+                .orElseThrow(() -> new ResourceNotFoundException("FoodCategory", "id", categoryId));
+    }
+
+    private SpaceEntity loadSpace(UUID spaceId) {
+        return spaceRepository
+                .findById(spaceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Space", "id", spaceId));
+    }
+}
