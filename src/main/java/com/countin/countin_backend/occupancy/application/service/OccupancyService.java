@@ -66,6 +66,7 @@ public class OccupancyService {
         UserEntity actor = loadUser(callerId);
 
         MemberEntity member = loadActiveMember(spaceId, request.getMemberId());
+        occupancyAccessService.assertSubjectIsResident(member);
         assertMemberHasNoCurrentOccupancy(spaceId, member.getId());
         validateMoveInDateForReserve(request.getMoveInDate());
 
@@ -112,6 +113,7 @@ public class OccupancyService {
 
         MoveInOccupancyRequest body = request != null ? request : new MoveInOccupancyRequest();
         OccupancyEntity occupancy = loadReservedOccupancy(spaceId, occupancyId);
+        occupancyAccessService.assertSubjectIsResident(occupancy.getMember());
 
         LocalDate scheduledMoveIn = occupancy.getMoveInDate();
         LocalDate effectiveMoveIn = body.getMoveInDate() != null ? body.getMoveInDate() : scheduledMoveIn;
@@ -189,6 +191,7 @@ public class OccupancyService {
         UserEntity actor = loadUser(callerId);
 
         MemberEntity member = loadActiveMember(spaceId, request.getMemberId());
+        occupancyAccessService.assertSubjectIsResident(member);
         assertMemberHasNoCurrentOccupancy(spaceId, member.getId());
         genderPolicyValidator.validate(space, member);
 
@@ -233,6 +236,7 @@ public class OccupancyService {
         UserEntity actor = loadUser(callerId);
 
         OccupancyEntity current = loadActiveOccupancy(spaceId, occupancyId);
+        occupancyAccessService.assertSubjectIsResident(current.getMember());
         genderPolicyValidator.validate(space, current.getMember());
         TargetSnapshot fromTarget = targetSnapshot(current);
 
@@ -294,6 +298,7 @@ public class OccupancyService {
         UserEntity actor = loadUser(callerId);
 
         OccupancyEntity occupancy = loadActiveOccupancy(spaceId, occupancyId);
+        occupancyAccessService.assertSubjectIsResident(occupancy.getMember());
         TargetSnapshot fromTarget = targetSnapshot(occupancy);
         LocalDateTime now = LocalDateTime.now();
 

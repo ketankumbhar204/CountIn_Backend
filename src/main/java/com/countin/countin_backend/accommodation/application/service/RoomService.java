@@ -42,7 +42,7 @@ public class RoomService {
                 spaceId, floorId, callerId, request.getRoomNumber());
 
         profileService.assertBedsAllowed(spaceId);
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         FloorEntity floor = floorRepository.findActiveByIdAndSpaceId(floorId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Floor", "id", floorId));
@@ -63,7 +63,7 @@ public class RoomService {
         log.info("Creating room under unit: spaceId={}, unitId={}, callerId={}, roomNumber={}",
                 spaceId, unitId, callerId, request.getRoomNumber());
 
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         UnitEntity unit = unitRepository.findActiveByIdAndSpaceId(unitId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", unitId));
@@ -82,7 +82,7 @@ public class RoomService {
     public List<RoomResponse> getRoomsByFloor(UUID spaceId, UUID floorId, UUID callerId) {
         log.info("Listing rooms by floor: spaceId={}, floorId={}, callerId={}", spaceId, floorId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         floorRepository.findActiveByIdAndSpaceId(floorId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Floor", "id", floorId));
 
@@ -96,7 +96,7 @@ public class RoomService {
     public List<RoomResponse> getRoomsByUnit(UUID spaceId, UUID unitId, UUID callerId) {
         log.info("Listing rooms by unit: spaceId={}, unitId={}, callerId={}", spaceId, unitId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         UnitEntity unit = unitRepository.findActiveByIdAndSpaceId(unitId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", unitId));
         layoutService.assertUnitVisible(unit);
@@ -111,7 +111,7 @@ public class RoomService {
     public RoomResponse getRoom(UUID spaceId, UUID roomId, UUID callerId) {
         log.info("Fetching room: spaceId={}, roomId={}, callerId={}", spaceId, roomId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         RoomEntity room = roomRepository.findActiveByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));
@@ -124,7 +124,7 @@ public class RoomService {
             UUID spaceId, UUID roomId, UUID callerId, UpdateRoomRequest request) {
         log.info("Updating room: spaceId={}, roomId={}, callerId={}", spaceId, roomId, callerId);
 
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         RoomEntity room = roomRepository.findActiveByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));
@@ -144,7 +144,7 @@ public class RoomService {
     public void deactivateRoom(UUID spaceId, UUID roomId, UUID callerId) {
         log.info("Deactivating room: spaceId={}, roomId={}, callerId={}", spaceId, roomId, callerId);
 
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         RoomEntity room = roomRepository.findActiveByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));

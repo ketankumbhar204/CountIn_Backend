@@ -56,7 +56,7 @@ public class AccommodationBulkService {
                 spaceId, buildingId, callerId, request.getCount());
 
         profileService.assertUnitsAllowed(spaceId);
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
         validateBulkUnitsRequest(request);
 
         BuildingEntity building = buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)
@@ -97,7 +97,7 @@ public class AccommodationBulkService {
         log.info("Bulk creating rooms under floor: spaceId={}, floorId={}, callerId={}, count={}",
                 spaceId, floorId, callerId, request.getCount());
 
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
         validateBulkRoomsRequest(spaceId, request);
 
         FloorEntity floor = floorRepository.findActiveByIdAndSpaceId(floorId, spaceId)
@@ -122,7 +122,7 @@ public class AccommodationBulkService {
                 spaceId, unitId, callerId, request.getCount());
 
         profileService.assertRoomsUnderUnitAllowed(spaceId);
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
         validateBulkRoomsRequest(spaceId, request);
 
         UnitEntity unit = unitRepository.findActiveByIdAndSpaceId(unitId, spaceId)
@@ -144,7 +144,7 @@ public class AccommodationBulkService {
                 spaceId, roomId, callerId, request.getCount());
 
         profileService.assertBedsAllowed(spaceId);
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         RoomEntity room = roomRepository.findActiveByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));

@@ -2,6 +2,7 @@ package com.countin.countin_backend.space.api.dto.response;
 
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
+import com.countin.countin_backend.space.application.policy.SpacePermissionPolicy;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
@@ -31,6 +32,9 @@ public class MySpaceResponse {
 
     private LocalDateTime joinedAt;
 
+    @Schema(description = "Computed capabilities for the caller in this space")
+    private SpacePermissionsResponse permissions;
+
     public static MySpaceResponse from(SpaceMembershipEntity membership) {
         return MySpaceResponse.builder()
                 .spaceId(membership.getSpace().getId())
@@ -40,6 +44,7 @@ public class MySpaceResponse {
                 .membershipRole(membership.getRole())
                 .isDefault(membership.isDefault())
                 .joinedAt(membership.getJoinedAt())
+                .permissions(SpacePermissionPolicy.forMembership(membership))
                 .build();
     }
 }

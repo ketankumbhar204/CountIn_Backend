@@ -43,7 +43,6 @@ class AccommodationSummaryServiceTest {
     @Mock
     private AccommodationSummaryRepository summaryRepository;
 
-    @InjectMocks
     private AccommodationAccessService accessService;
 
     private AccommodationSummaryService summaryService;
@@ -54,6 +53,8 @@ class AccommodationSummaryServiceTest {
 
     @BeforeEach
     void setUp() {
+        accessService = AccommodationAccessTestSupport.accessService(
+                spaceRepository, spaceMembershipRepository, profileResolver);
         summaryService = new AccommodationSummaryService(accessService, buildingRepository, summaryRepository);
         spaceId = UUID.randomUUID();
         buildingId = UUID.randomUUID();
@@ -73,8 +74,8 @@ class AccommodationSummaryServiceTest {
         building.setId(buildingId);
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndStatus(any(), any(), any()))
-                .thenReturn(true);
+        AccommodationAccessTestSupport.stubMembership(
+                spaceMembershipRepository, callerId, spaceId, space, com.countin.countin_backend.member.domain.model.MembershipRole.STAFF);
         when(buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)).thenReturn(Optional.of(building));
         when(summaryRepository.countActiveFloors(buildingId)).thenReturn(3L);
         when(summaryRepository.countActiveUnits(buildingId)).thenReturn(0L);

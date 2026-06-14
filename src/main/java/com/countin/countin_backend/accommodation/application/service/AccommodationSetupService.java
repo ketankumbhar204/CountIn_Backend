@@ -150,7 +150,7 @@ public class AccommodationSetupService {
 
     private SpaceEntity validateSetupRequest(UUID spaceId, UUID callerId, AccommodationSetupRequest request) {
         SpaceEntity space = accessService.loadAccommodationSpace(spaceId);
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         if (request.getSpaceType() != space.getType()) {
             throw new BusinessException(

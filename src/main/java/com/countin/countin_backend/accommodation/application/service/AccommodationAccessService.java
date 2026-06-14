@@ -4,9 +4,9 @@ import com.countin.countin_backend.accommodation.domain.model.AccommodationProfi
 import com.countin.countin_backend.accommodation.domain.policy.AccommodationProfileResolver;
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.member.application.service.SpaceMembershipResolver;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
-import com.countin.countin_backend.member.domain.model.MembershipStatus;
-import com.countin.countin_backend.member.infrastructure.persistence.repository.SpaceMembershipRepository;
+import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
@@ -20,8 +20,14 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AccommodationAccessService {
 
+    private static final List<MembershipRole> VIEW_STRUCTURE_ROLES =
+            List.of(MembershipRole.OWNER, MembershipRole.MANAGER, MembershipRole.STAFF);
+
+    private static final List<MembershipRole> MANAGE_STRUCTURE_ROLES =
+            List.of(MembershipRole.OWNER, MembershipRole.MANAGER);
+
     private final SpaceRepository spaceRepository;
-    private final SpaceMembershipRepository spaceMembershipRepository;
+    private final SpaceMembershipResolver membershipResolver;
     private final AccommodationProfileResolver profileResolver;
 
     public SpaceEntity loadAccommodationSpace(UUID spaceId) {
@@ -29,7 +35,7 @@ public class AccommodationAccessService {
                 .orElseThrow(() -> new ResourceNotFoundException("Space", "id", spaceId));
         if (!profileResolver.isAccommodationApplicable(space.getType())) {
             throw new BusinessException(
-                    "Accommodation is not applicable for Mess spaces", HttpStatus.BAD_REQUEST);
+                    "Accommodation is not applicable for Mess spaces", HttpStatus.FORBIDDEN);
         }
         return space;
     }
@@ -43,31 +49,47 @@ public class AccommodationAccessService {
         return loadAccommodationSpace(spaceId).getType();
     }
 
-    public void assertCallerBelongsToSpace(UUID spaceId, UUID callerId) {
+    public SpaceMembershipEntity assertCanViewStructure(UUID spaceId, UUID callerId) {
+        SpaceMembershipEntity membership = membershipResolver.requireActive(spaceId, callerId);
         loadAccommodationSpace(spaceId);
-        boolean belongs = spaceMembershipRepository.existsByUserIdAndSpaceIdAndStatus(
-                callerId, spaceId, MembershipStatus.ACTIVE);
-        if (!belongs) {
+        requireViewStructure(membership);
+        return membership;
+    }
+
+    public SpaceMembershipEntity assertCanManageStructure(UUID spaceId, UUID callerId) {
+        SpaceMembershipEntity membership = membershipResolver.requireActive(spaceId, callerId);
+        loadAccommodationSpace(spaceId);
+        requireManageStructure(membership);
+        return membership;
+    }
+
+    public SpaceMembershipEntity assertCanDeactivateStructure(UUID spaceId, UUID callerId) {
+        SpaceMembershipEntity membership = membershipResolver.requireActive(spaceId, callerId);
+        loadAccommodationSpace(spaceId);
+        requireDeactivateStructure(membership);
+        return membership;
+    }
+
+    public SpaceMembershipEntity assertCanSearchAllocationTargets(UUID spaceId, UUID callerId) {
+        return assertCanManageStructure(spaceId, callerId);
+    }
+
+    public void requireViewStructure(SpaceMembershipEntity membership) {
+        if (!VIEW_STRUCTURE_ROLES.contains(membership.getRole())) {
             throw new BusinessException(
-                    "You do not have access to this space", HttpStatus.FORBIDDEN);
+                    "You do not have permission to view accommodation structure", HttpStatus.FORBIDDEN);
         }
     }
 
-    public void assertOwnerOrManager(UUID spaceId, UUID callerId) {
-        loadAccommodationSpace(spaceId);
-        boolean allowed = spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
-                callerId, spaceId, List.of(MembershipRole.OWNER, MembershipRole.MANAGER));
-        if (!allowed) {
+    public void requireManageStructure(SpaceMembershipEntity membership) {
+        if (!MANAGE_STRUCTURE_ROLES.contains(membership.getRole())) {
             throw new BusinessException(
                     "Only OWNER or MANAGER can perform this action", HttpStatus.FORBIDDEN);
         }
     }
 
-    public void assertCallerIsOwner(UUID spaceId, UUID callerId) {
-        loadAccommodationSpace(spaceId);
-        boolean isOwner = spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
-                callerId, spaceId, List.of(MembershipRole.OWNER));
-        if (!isOwner) {
+    public void requireDeactivateStructure(SpaceMembershipEntity membership) {
+        if (membership.getRole() != MembershipRole.OWNER) {
             throw new BusinessException(
                     "Only the space owner can perform this action", HttpStatus.FORBIDDEN);
         }

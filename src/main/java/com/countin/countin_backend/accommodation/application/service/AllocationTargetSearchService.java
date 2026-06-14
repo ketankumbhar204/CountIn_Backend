@@ -42,7 +42,7 @@ public class AllocationTargetSearchService {
                 targetType,
                 query);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanSearchAllocationTargets(spaceId, callerId);
         SpaceType spaceType = accessService.loadSpaceType(spaceId);
         AllocationTargetType effectiveTargetType = resolveTargetType(targetType, spaceType);
         String normalizedQuery = normalizeQuery(query);

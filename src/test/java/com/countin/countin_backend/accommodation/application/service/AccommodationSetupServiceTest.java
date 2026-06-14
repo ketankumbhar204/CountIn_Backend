@@ -81,7 +81,6 @@ class AccommodationSetupServiceTest {
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
-    @InjectMocks
     private AccommodationAccessService accessService;
 
     private AccommodationProfileService profileService;
@@ -93,6 +92,8 @@ class AccommodationSetupServiceTest {
 
     @BeforeEach
     void setUp() {
+        accessService = AccommodationAccessTestSupport.accessService(
+                spaceRepository, spaceMembershipRepository, profileResolver);
         profileService = new AccommodationProfileService(accessService);
         setupService = new AccommodationSetupService(
                 accessService,
@@ -122,8 +123,8 @@ class AccommodationSetupServiceTest {
     @Test
     void preview_computesPgTotalsWithoutPersistence() {
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(pgSpace));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(any(), any(), any()))
-                .thenReturn(true);
+        AccommodationAccessTestSupport.stubMembership(
+                spaceMembershipRepository, ownerId, spaceId, pgSpace, com.countin.countin_backend.member.domain.model.MembershipRole.OWNER);
 
         AccommodationSetupPreviewResponse response =
                 setupService.preview(spaceId, ownerId, pgSetupRequest());
@@ -138,8 +139,8 @@ class AccommodationSetupServiceTest {
     @Test
     void preview_rejectsSpaceTypeMismatch() {
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(pgSpace));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(any(), any(), any()))
-                .thenReturn(true);
+        AccommodationAccessTestSupport.stubMembership(
+                spaceMembershipRepository, ownerId, spaceId, pgSpace, com.countin.countin_backend.member.domain.model.MembershipRole.OWNER);
 
         AccommodationSetupRequest request = pgSetupRequest();
         setField(request, "spaceType", SpaceType.HOSTEL);

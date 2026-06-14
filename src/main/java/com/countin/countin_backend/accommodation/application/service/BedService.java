@@ -40,7 +40,7 @@ public class BedService {
                 spaceId, roomId, callerId, request.getBedNumber());
 
         profileService.assertBedsAllowed(spaceId);
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         RoomEntity room = roomRepository.findActiveByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));
@@ -68,7 +68,7 @@ public class BedService {
     public List<BedResponse> getBeds(UUID spaceId, UUID roomId, UUID callerId) {
         log.info("Listing beds: spaceId={}, roomId={}, callerId={}", spaceId, roomId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         roomRepository.findActiveByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));
 
@@ -83,7 +83,7 @@ public class BedService {
         log.info("Fetching bed: spaceId={}, roomId={}, bedId={}, callerId={}",
                 spaceId, roomId, bedId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         roomRepository.findActiveByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));
 
@@ -98,7 +98,7 @@ public class BedService {
 
     @Transactional(readOnly = true)
     public BedResponse getBedById(UUID spaceId, UUID bedId, UUID callerId) {
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         BedEntity bed = bedRepository.findByIdAndSpaceId(bedId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Bed", bedId));
@@ -116,7 +116,7 @@ public class BedService {
                 spaceId, roomId, bedId, callerId);
 
         profileService.assertBedsAllowed(spaceId);
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         roomRepository.findActiveByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));
@@ -154,7 +154,7 @@ public class BedService {
         log.info("Deactivating bed: spaceId={}, roomId={}, bedId={}, callerId={}",
                 spaceId, roomId, bedId, callerId);
 
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         roomRepository.findActiveByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));

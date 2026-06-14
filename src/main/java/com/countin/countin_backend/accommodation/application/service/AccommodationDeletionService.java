@@ -33,7 +33,7 @@ public class AccommodationDeletionService {
     @Transactional
     public void deleteBed(UUID spaceId, UUID bedId, UUID callerId) {
         log.info("Cascade deleting bed: spaceId={}, bedId={}, callerId={}", spaceId, bedId, callerId);
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         AccommodationDeletionSubtree subtree = subtreeLoader.loadBed(spaceId, bedId);
         assertDeletable(deletionPolicy.evaluate(subtree));
@@ -43,7 +43,7 @@ public class AccommodationDeletionService {
     @Transactional
     public void deleteRoom(UUID spaceId, UUID roomId, UUID callerId) {
         log.info("Cascade deleting room: spaceId={}, roomId={}, callerId={}", spaceId, roomId, callerId);
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         AccommodationDeletionSubtree subtree = subtreeLoader.loadRoom(spaceId, roomId);
         assertDeletable(deletionPolicy.evaluate(subtree));
@@ -53,7 +53,7 @@ public class AccommodationDeletionService {
     @Transactional
     public void deleteFloor(UUID spaceId, UUID floorId, UUID callerId) {
         log.info("Cascade deleting floor: spaceId={}, floorId={}, callerId={}", spaceId, floorId, callerId);
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         AccommodationDeletionSubtree subtree = subtreeLoader.loadFloor(spaceId, floorId);
         assertDeletable(deletionPolicy.evaluate(subtree));
@@ -63,7 +63,7 @@ public class AccommodationDeletionService {
     @Transactional
     public void deleteUnit(UUID spaceId, UUID unitId, UUID callerId) {
         log.info("Cascade deleting unit: spaceId={}, unitId={}, callerId={}", spaceId, unitId, callerId);
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         AccommodationDeletionSubtree subtree = subtreeLoader.loadUnit(spaceId, unitId);
         assertDeletable(deletionPolicy.evaluate(subtree));
@@ -74,7 +74,7 @@ public class AccommodationDeletionService {
     public void deleteBuilding(UUID spaceId, UUID buildingId, UUID callerId) {
         log.info("Cascade deleting building: spaceId={}, buildingId={}, callerId={}",
                 spaceId, buildingId, callerId);
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         AccommodationDeletionSubtree subtree = subtreeLoader.loadBuilding(spaceId, buildingId);
         assertDeletable(deletionPolicy.evaluate(subtree));

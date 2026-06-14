@@ -16,7 +16,12 @@ import com.countin.countin_backend.accommodation.infrastructure.persistence.repo
 import com.countin.countin_backend.accommodation.infrastructure.persistence.repository.RoomRepository;
 import com.countin.countin_backend.accommodation.infrastructure.persistence.repository.UnitRepository;
 import com.countin.countin_backend.common.web.PagedResponse;
+import com.countin.countin_backend.member.application.service.SpaceMembershipResolver;
+import com.countin.countin_backend.member.domain.model.MembershipRole;
+import com.countin.countin_backend.member.domain.model.MembershipStatus;
+import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.SpaceMembershipRepository;
+import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
@@ -69,7 +74,8 @@ class AccommodationLazyListServiceTest {
 
     @BeforeEach
     void setUp() {
-        accessService = new AccommodationAccessService(spaceRepository, spaceMembershipRepository, profileResolver);
+        SpaceMembershipResolver membershipResolver = new SpaceMembershipResolver(spaceMembershipRepository);
+        accessService = new AccommodationAccessService(spaceRepository, membershipResolver, profileResolver);
         lazyListService = new AccommodationLazyListService(
                 accessService,
                 lazyListRepository,
@@ -95,8 +101,16 @@ class AccommodationLazyListServiceTest {
         Pageable pageable = PageRequest.of(0, 20);
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndStatus(any(), any(), any()))
-                .thenReturn(true);
+        UserEntity user = UserEntity.builder().fullName("Caller").mobileNumber("9000000006").build();
+        user.setId(callerId);
+        SpaceMembershipEntity membership = SpaceMembershipEntity.builder()
+                .user(user)
+                .space(space)
+                .role(MembershipRole.OWNER)
+                .status(MembershipStatus.ACTIVE)
+                .build();
+        when(spaceMembershipRepository.findMembershipByUserAndSpace(callerId, spaceId))
+                .thenReturn(Optional.of(membership));
         when(buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)).thenReturn(Optional.of(building));
         when(lazyListRepository.findFloorListItemsByBuildingId(
                         eq(buildingId),

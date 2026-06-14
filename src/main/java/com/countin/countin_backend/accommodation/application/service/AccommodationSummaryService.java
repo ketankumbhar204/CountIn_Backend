@@ -32,7 +32,7 @@ public class AccommodationSummaryService {
         log.info("Fetching building summary: spaceId={}, buildingId={}, callerId={}",
                 spaceId, buildingId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         BuildingEntity building = buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Building", "id", buildingId));

@@ -12,7 +12,12 @@ import com.countin.countin_backend.accommodation.domain.policy.AccommodationProf
 import com.countin.countin_backend.accommodation.infrastructure.persistence.projection.AllocationTargetSearchRow;
 import com.countin.countin_backend.accommodation.infrastructure.persistence.repository.AllocationTargetSearchRepository;
 import com.countin.countin_backend.common.web.PagedResponse;
+import com.countin.countin_backend.member.application.service.SpaceMembershipResolver;
+import com.countin.countin_backend.member.domain.model.MembershipRole;
+import com.countin.countin_backend.member.domain.model.MembershipStatus;
+import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.SpaceMembershipRepository;
+import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
 import com.countin.countin_backend.occupancy.domain.model.AllocationTargetType;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
@@ -54,7 +59,8 @@ class AllocationTargetSearchServiceTest {
 
     @BeforeEach
     void setUp() {
-        accessService = new AccommodationAccessService(spaceRepository, spaceMembershipRepository, profileResolver);
+        SpaceMembershipResolver membershipResolver = new SpaceMembershipResolver(spaceMembershipRepository);
+        accessService = new AccommodationAccessService(spaceRepository, membershipResolver, profileResolver);
         searchService = new AllocationTargetSearchService(accessService, searchRepository);
         spaceId = UUID.randomUUID();
         callerId = UUID.randomUUID();
@@ -104,8 +110,8 @@ class AllocationTargetSearchServiceTest {
         SpaceEntity space = SpaceEntity.builder().name("Rental").type(SpaceType.RENTAL).isActive(true).build();
         space.setId(spaceId);
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndStatus(any(), any(), any()))
-                .thenReturn(true);
+        AccommodationAccessTestSupport.stubMembership(
+                spaceMembershipRepository, callerId, spaceId, space, MembershipRole.MANAGER);
 
         UUID unitId = UUID.randomUUID();
         AllocationTargetSearchRow row = new AllocationTargetSearchRow(
@@ -146,7 +152,15 @@ class AllocationTargetSearchServiceTest {
         SpaceEntity space = SpaceEntity.builder().name("PG").type(SpaceType.PG).isActive(true).build();
         space.setId(spaceId);
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndStatus(any(), any(), any()))
-                .thenReturn(true);
+        UserEntity user = UserEntity.builder().fullName("Manager").mobileNumber("9000000007").build();
+        user.setId(callerId);
+        SpaceMembershipEntity membership = SpaceMembershipEntity.builder()
+                .user(user)
+                .space(space)
+                .role(MembershipRole.MANAGER)
+                .status(MembershipStatus.ACTIVE)
+                .build();
+        when(spaceMembershipRepository.findMembershipByUserAndSpace(callerId, spaceId))
+                .thenReturn(Optional.of(membership));
     }
 }

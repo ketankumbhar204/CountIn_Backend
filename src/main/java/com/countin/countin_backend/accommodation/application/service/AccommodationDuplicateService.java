@@ -49,7 +49,7 @@ public class AccommodationDuplicateService {
         log.info("Duplicating building: spaceId={}, buildingId={}, callerId={}",
                 spaceId, buildingId, callerId);
 
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         BuildingEntity sourceBuilding = buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Building", "id", buildingId));
@@ -151,7 +151,7 @@ public class AccommodationDuplicateService {
         profileService.assertFloorsAllowed(spaceId);
         profileService.assertRoomsUnderFloorAllowed(spaceId);
         profileService.assertBedsAllowed(spaceId);
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Building", "id", buildingId));
@@ -224,7 +224,7 @@ public class AccommodationDuplicateService {
             UUID spaceId, UUID roomId, UUID callerId, DuplicateRoomRequest request) {
         log.info("Duplicating room: spaceId={}, roomId={}, callerId={}", spaceId, roomId, callerId);
 
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         RoomEntity sourceRoom = roomRepository.findActiveByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));

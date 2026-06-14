@@ -36,7 +36,7 @@ public class BuildingService {
         log.info("Creating building: spaceId={}, callerId={}, name={}", spaceId, callerId, request.getName());
 
         SpaceEntity space = accessService.loadAccommodationSpace(spaceId);
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         if (buildingRepository.existsBySpaceIdAndNameAndIsActiveTrue(spaceId, request.getName())) {
             throw new BusinessException("An active building with this name already exists in the space");
@@ -62,7 +62,7 @@ public class BuildingService {
     public List<BuildingResponse> getBuildings(UUID spaceId, UUID callerId) {
         log.info("Listing buildings: spaceId={}, callerId={}", spaceId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         return buildingRepository.findActiveBySpaceId(spaceId)
                 .stream()
@@ -74,7 +74,7 @@ public class BuildingService {
     public BuildingResponse getBuilding(UUID spaceId, UUID buildingId, UUID callerId) {
         log.info("Fetching building: spaceId={}, buildingId={}, callerId={}", spaceId, buildingId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         BuildingEntity building = buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Building", "id", buildingId));
@@ -88,7 +88,7 @@ public class BuildingService {
             UUID spaceId, UUID buildingId, UUID callerId, UpdateBuildingRequest request) {
         log.info("Updating building: spaceId={}, buildingId={}, callerId={}", spaceId, buildingId, callerId);
 
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         BuildingEntity building = buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Building", "id", buildingId));
@@ -114,7 +114,7 @@ public class BuildingService {
         log.info("Deactivating building: spaceId={}, buildingId={}, callerId={}",
                 spaceId, buildingId, callerId);
 
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         BuildingEntity building = buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Building", "id", buildingId));

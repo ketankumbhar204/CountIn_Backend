@@ -33,7 +33,7 @@ public class AccommodationRestoreService {
     @Transactional
     public void restoreBuilding(UUID spaceId, UUID buildingId, UUID callerId) {
         log.info("Restoring building: spaceId={}, buildingId={}, callerId={}", spaceId, buildingId, callerId);
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         BuildingEntity building = buildingRepository.findByIdAndSpaceId(buildingId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Building", "id", buildingId));
@@ -51,7 +51,7 @@ public class AccommodationRestoreService {
     @Transactional
     public void restoreFloor(UUID spaceId, UUID floorId, UUID callerId) {
         log.info("Restoring floor: spaceId={}, floorId={}, callerId={}", spaceId, floorId, callerId);
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         FloorEntity floor = floorRepository.findByIdAndSpaceId(floorId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Floor", "id", floorId));
@@ -73,7 +73,7 @@ public class AccommodationRestoreService {
     @Transactional
     public void restoreUnit(UUID spaceId, UUID unitId, UUID callerId) {
         log.info("Restoring unit: spaceId={}, unitId={}, callerId={}", spaceId, unitId, callerId);
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         UnitEntity unit = unitRepository.findByIdAndSpaceId(unitId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", unitId));
@@ -95,7 +95,7 @@ public class AccommodationRestoreService {
     @Transactional
     public void restoreRoom(UUID spaceId, UUID roomId, UUID callerId) {
         log.info("Restoring room: spaceId={}, roomId={}, callerId={}", spaceId, roomId, callerId);
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         RoomEntity room = roomRepository.findByIdAndSpaceId(roomId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Room", roomId));
@@ -116,7 +116,7 @@ public class AccommodationRestoreService {
     @Transactional
     public void restoreBed(UUID spaceId, UUID bedId, UUID callerId) {
         log.info("Restoring bed: spaceId={}, bedId={}, callerId={}", spaceId, bedId, callerId);
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         BedEntity bed = bedRepository.findByIdAndSpaceId(bedId, spaceId)
                 .orElseThrow(() -> ResourceNotFoundException.notInSpace("Bed", bedId));

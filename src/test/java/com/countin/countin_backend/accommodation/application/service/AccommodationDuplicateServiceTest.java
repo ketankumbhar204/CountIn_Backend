@@ -65,7 +65,6 @@ class AccommodationDuplicateServiceTest {
     @Mock
     private BedRepository bedRepository;
 
-    @InjectMocks
     private AccommodationAccessService accessService;
 
     private AccommodationProfileService profileService;
@@ -78,6 +77,8 @@ class AccommodationDuplicateServiceTest {
 
     @BeforeEach
     void setUp() {
+        accessService = AccommodationAccessTestSupport.accessService(
+                spaceRepository, spaceMembershipRepository, profileResolver);
         profileService = new AccommodationProfileService(accessService);
         duplicateService = new AccommodationDuplicateService(
                 accessService,
@@ -109,8 +110,8 @@ class AccommodationDuplicateServiceTest {
         sourceFloor.setId(floorId);
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(any(), any(), any()))
-                .thenReturn(true);
+        AccommodationAccessTestSupport.stubMembership(
+                spaceMembershipRepository, callerId, spaceId, space, com.countin.countin_backend.member.domain.model.MembershipRole.MANAGER);
         when(buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)).thenReturn(Optional.of(building));
         when(floorRepository.findActiveByIdAndBuildingId(floorId, buildingId)).thenReturn(Optional.of(sourceFloor));
         when(floorRepository.existsByBuildingIdAndFloorNumberAndIsActiveTrue(buildingId, 2)).thenReturn(true);
@@ -150,8 +151,8 @@ class AccommodationDuplicateServiceTest {
         sourceUnit.setId(UUID.randomUUID());
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(any(), any(), any()))
-                .thenReturn(true);
+        AccommodationAccessTestSupport.stubMembership(
+                spaceMembershipRepository, callerId, spaceId, space, com.countin.countin_backend.member.domain.model.MembershipRole.MANAGER);
         when(buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)).thenReturn(Optional.of(building));
         when(floorRepository.findActiveByIdAndBuildingId(floorId, buildingId)).thenReturn(Optional.of(sourceFloor));
         when(floorRepository.existsByBuildingIdAndFloorNumberAndIsActiveTrue(buildingId, 5)).thenReturn(false);
@@ -190,8 +191,8 @@ class AccommodationDuplicateServiceTest {
         building.setId(buildingId);
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(any(), any(), any()))
-                .thenReturn(true);
+        AccommodationAccessTestSupport.stubMembership(
+                spaceMembershipRepository, callerId, spaceId, space, com.countin.countin_backend.member.domain.model.MembershipRole.MANAGER);
         when(buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)).thenReturn(Optional.of(building));
         when(buildingRepository.existsBySpaceIdAndNameAndIsActiveTrue(spaceId, "Building B")).thenReturn(true);
 

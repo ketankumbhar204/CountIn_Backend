@@ -41,7 +41,7 @@ public class UnitService {
         log.info("Creating unit: spaceId={}, buildingId={}, callerId={}, unitNumber={}",
                 spaceId, buildingId, callerId, request.getUnitNumber());
 
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         BuildingEntity building = buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Building", "id", buildingId));
@@ -58,7 +58,7 @@ public class UnitService {
         log.info("Creating unit under floor: spaceId={}, buildingId={}, floorId={}, callerId={}",
                 spaceId, buildingId, floorId, callerId);
 
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         BuildingEntity building = buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Building", "id", buildingId));
@@ -79,7 +79,7 @@ public class UnitService {
     public List<UnitResponse> getUnits(UUID spaceId, UUID buildingId, UUID callerId, boolean includeSynthetic) {
         log.info("Listing units: spaceId={}, buildingId={}, callerId={}", spaceId, buildingId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         assertBuildingInSpace(spaceId, buildingId);
 
         return unitRepository.findActiveByBuildingId(buildingId, includeSynthetic)
@@ -91,7 +91,7 @@ public class UnitService {
     @Transactional(readOnly = true)
     public List<UnitResponse> getUnitsByFloor(
             UUID spaceId, UUID buildingId, UUID floorId, UUID callerId, boolean includeSynthetic) {
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         assertBuildingInSpace(spaceId, buildingId);
         floorRepository.findActiveByIdAndBuildingId(floorId, buildingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Floor", "id", floorId));
@@ -107,7 +107,7 @@ public class UnitService {
         log.info("Fetching unit: spaceId={}, buildingId={}, unitId={}, callerId={}",
                 spaceId, buildingId, unitId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         UnitEntity unit = unitRepository.findActiveByIdAndBuildingId(unitId, buildingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", unitId));
@@ -119,7 +119,7 @@ public class UnitService {
 
     @Transactional(readOnly = true)
     public UnitResponse getUnitById(UUID spaceId, UUID unitId, UUID callerId) {
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         UnitEntity unit = unitRepository.findByIdAndSpaceId(unitId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", unitId));
@@ -158,7 +158,7 @@ public class UnitService {
         log.info("Deactivating unit: spaceId={}, buildingId={}, unitId={}, callerId={}",
                 spaceId, buildingId, unitId, callerId);
 
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         UnitEntity unit = unitRepository.findActiveByIdAndBuildingId(unitId, buildingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Unit", "id", unitId));
@@ -178,7 +178,7 @@ public class UnitService {
             UUID spaceId, UnitEntity unit, UUID callerId, UpdateUnitRequest request) {
         log.info("Updating unit: spaceId={}, unitId={}, callerId={}", spaceId, unit.getId(), callerId);
 
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
         layoutService.assertUnitUpdateAllowed(unit);
 
         UUID buildingId = unit.getBuilding().getId();

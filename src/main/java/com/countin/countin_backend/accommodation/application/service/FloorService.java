@@ -38,7 +38,7 @@ public class FloorService {
                 spaceId, buildingId, callerId, request.getName());
 
         profileService.assertFloorsAllowed(spaceId);
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         BuildingEntity building = buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Building", "id", buildingId));
@@ -65,7 +65,7 @@ public class FloorService {
     public List<FloorResponse> getFloors(UUID spaceId, UUID buildingId, UUID callerId) {
         log.info("Listing floors: spaceId={}, buildingId={}, callerId={}", spaceId, buildingId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         assertBuildingInSpace(spaceId, buildingId);
 
         return floorRepository.findActiveByBuildingId(buildingId)
@@ -79,7 +79,7 @@ public class FloorService {
         log.info("Fetching floor: spaceId={}, buildingId={}, floorId={}, callerId={}",
                 spaceId, buildingId, floorId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         FloorEntity floor = floorRepository.findActiveByIdAndBuildingId(floorId, buildingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Floor", "id", floorId));
@@ -90,7 +90,7 @@ public class FloorService {
 
     @Transactional(readOnly = true)
     public FloorResponse getFloorById(UUID spaceId, UUID floorId, UUID callerId) {
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         FloorEntity floor = floorRepository.findByIdAndSpaceId(floorId, spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Floor", "id", floorId));
@@ -105,7 +105,7 @@ public class FloorService {
                 spaceId, buildingId, floorId, callerId);
 
         profileService.assertFloorsAllowed(spaceId);
-        accessService.assertOwnerOrManager(spaceId, callerId);
+        accessService.assertCanManageStructure(spaceId, callerId);
 
         FloorEntity floor = floorRepository.findActiveByIdAndBuildingId(floorId, buildingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Floor", "id", floorId));
@@ -136,7 +136,7 @@ public class FloorService {
         log.info("Deactivating floor: spaceId={}, buildingId={}, floorId={}, callerId={}",
                 spaceId, buildingId, floorId, callerId);
 
-        accessService.assertCallerIsOwner(spaceId, callerId);
+        accessService.assertCanDeactivateStructure(spaceId, callerId);
 
         FloorEntity floor = floorRepository.findActiveByIdAndBuildingId(floorId, buildingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Floor", "id", floorId));

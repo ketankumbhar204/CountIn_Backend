@@ -134,7 +134,7 @@ class AccommodationDeletionServiceTest {
 
         verify(bedRepository).deleteAll(subtree.getBeds());
         verify(roomRepository).deleteAll(subtree.getRooms());
-        verify(accessService).assertCallerIsOwner(spaceId, callerId);
+        verify(accessService).assertCanDeactivateStructure(spaceId, callerId);
     }
 
     @Test

@@ -31,7 +31,9 @@ import com.countin.countin_backend.occupancy.application.service.OccupancyServic
 import com.countin.countin_backend.occupancy.infrastructure.persistence.repository.OccupancyRepository;
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
+import com.countin.countin_backend.member.application.service.SpaceMembershipResolver;
 import com.countin.countin_backend.member.domain.model.MembershipStatus;
+import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.SpaceMembershipRepository;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
@@ -90,7 +92,8 @@ class AccommodationStructureServiceTest {
     @Mock
     private OccupancyRepository occupancyRepository;
 
-    @InjectMocks
+    private SpaceMembershipResolver membershipResolver;
+
     private AccommodationAccessService accessService;
 
     private AccommodationProfileService profileService;
@@ -115,6 +118,8 @@ class AccommodationStructureServiceTest {
 
     @BeforeEach
     void setUp() {
+        membershipResolver = new SpaceMembershipResolver(spaceMembershipRepository);
+        accessService = new AccommodationAccessService(spaceRepository, membershipResolver, profileResolver);
         profileService = new AccommodationProfileService(accessService);
         layoutService = new AccommodationLayoutService();
         syntheticUnitService = new SyntheticUnitService(unitRepository, numberingService);
@@ -203,9 +208,7 @@ class AccommodationStructureServiceTest {
         setField(request, "name", "Building A");
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(pgSpace));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
-                ownerId, spaceId, java.util.List.of(MembershipRole.OWNER, MembershipRole.MANAGER)))
-                .thenReturn(true);
+        stubOwnerMembership(pgSpace);
         when(buildingRepository.existsBySpaceIdAndNameAndIsActiveTrue(spaceId, "Building A"))
                 .thenReturn(false);
         when(buildingRepository.save(any(BuildingEntity.class))).thenAnswer(invocation -> {
@@ -231,7 +234,7 @@ class AccommodationStructureServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Accommodation is not applicable for Mess spaces")
                 .satisfies(ex -> assertThat(((BusinessException) ex).getStatus())
-                        .isEqualTo(HttpStatus.BAD_REQUEST));
+                        .isEqualTo(HttpStatus.FORBIDDEN));
 
         verify(buildingRepository, never()).save(any());
     }
@@ -239,8 +242,7 @@ class AccommodationStructureServiceTest {
     @Test
     void deactivateBuilding_whenActiveFloorsExist_throwsBusinessException() {
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(pgSpace));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
-                ownerId, spaceId, java.util.List.of(MembershipRole.OWNER))).thenReturn(true);
+        stubOwnerMembership(pgSpace);
         when(buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId))
                 .thenReturn(Optional.of(building));
         when(floorRepository.existsByBuildingIdAndIsActiveTrue(buildingId)).thenReturn(true);
@@ -276,9 +278,7 @@ class AccommodationStructureServiceTest {
         setField(request, "capacity", 1);
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(rentalSpace));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
-                ownerId, spaceId, java.util.List.of(MembershipRole.OWNER, MembershipRole.MANAGER)))
-                .thenReturn(true);
+        stubOwnerMembership(rentalSpace);
 
         UnitEntity unit = UnitEntity.builder()
                 .building(BuildingEntity.builder()
@@ -331,9 +331,7 @@ class AccommodationStructureServiceTest {
         floor.setId(floorId);
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(pgSpace));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
-                ownerId, spaceId, java.util.List.of(MembershipRole.OWNER, MembershipRole.MANAGER)))
-                .thenReturn(true);
+        stubOwnerMembership(pgSpace);
         when(floorRepository.findActiveByIdAndSpaceId(floorId, spaceId)).thenReturn(Optional.of(floor));
         when(unitRepository.save(any(UnitEntity.class))).thenAnswer(invocation -> {
             UnitEntity unit = invocation.getArgument(0);
@@ -365,8 +363,7 @@ class AccommodationStructureServiceTest {
         floor.setId(floorId);
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(pgSpace));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
-                ownerId, spaceId, java.util.List.of(MembershipRole.OWNER))).thenReturn(true);
+        stubOwnerMembership(pgSpace);
         when(floorRepository.findActiveByIdAndBuildingId(floorId, buildingId)).thenReturn(Optional.of(floor));
         when(buildingRepository.findActiveByIdAndSpaceId(buildingId, spaceId)).thenReturn(Optional.of(building));
         when(roomRepository.existsByFloorIdAndIsActiveTrue(floorId)).thenReturn(true);
@@ -381,8 +378,7 @@ class AccommodationStructureServiceTest {
     @Test
     void getBuildings_whenCallerBelongsToSpace_returnsList() {
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(pgSpace));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndStatus(
-                ownerId, spaceId, MembershipStatus.ACTIVE)).thenReturn(true);
+        stubOwnerMembership(pgSpace);
         when(buildingRepository.findActiveBySpaceId(spaceId)).thenReturn(java.util.List.of(building));
 
         var buildings = buildingService.getBuildings(spaceId, ownerId);
@@ -416,9 +412,7 @@ class AccommodationStructureServiceTest {
         unit.setId(unitId);
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(coLivingSpace));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
-                ownerId, spaceId, java.util.List.of(MembershipRole.OWNER, MembershipRole.MANAGER)))
-                .thenReturn(true);
+        stubOwnerMembership(coLivingSpace);
         when(unitRepository.findActiveByIdAndSpaceId(unitId, spaceId)).thenReturn(Optional.of(unit));
         when(roomRepository.save(any(RoomEntity.class))).thenAnswer(invocation -> {
             RoomEntity room = invocation.getArgument(0);
@@ -429,6 +423,23 @@ class AccommodationStructureServiceTest {
         var response = roomService.createRoomUnderUnit(spaceId, unitId, ownerId, request);
 
         assertThat(response.getRoomType()).isEqualTo(RoomType.DORMITORY);
+    }
+
+    private void stubOwnerMembership(SpaceEntity space) {
+        stubMembership(ownerId, MembershipRole.OWNER, space);
+    }
+
+    private void stubMembership(UUID userId, MembershipRole role, SpaceEntity space) {
+        UserEntity user = UserEntity.builder().fullName("Owner").mobileNumber("9876543210").build();
+        user.setId(userId);
+        SpaceMembershipEntity membership = SpaceMembershipEntity.builder()
+                .user(user)
+                .space(space)
+                .role(role)
+                .status(MembershipStatus.ACTIVE)
+                .build();
+        when(spaceMembershipRepository.findMembershipByUserAndSpace(userId, spaceId))
+                .thenReturn(Optional.of(membership));
     }
 
     private void setField(Object target, String fieldName, Object value) {

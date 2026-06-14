@@ -60,7 +60,6 @@ class AccommodationBulkServiceTest {
     @Mock
     private BedRepository bedRepository;
 
-    @InjectMocks
     private AccommodationAccessService accessService;
 
     private AccommodationProfileService profileService;
@@ -73,6 +72,8 @@ class AccommodationBulkServiceTest {
 
     @BeforeEach
     void setUp() {
+        accessService = AccommodationAccessTestSupport.accessService(
+                spaceRepository, spaceMembershipRepository, profileResolver);
         profileService = new AccommodationProfileService(accessService);
         layoutService = new AccommodationLayoutService();
         syntheticUnitService = new SyntheticUnitService(unitRepository, numberingService);
@@ -124,8 +125,8 @@ class AccommodationBulkServiceTest {
         rentalSpace.setId(spaceId);
 
         when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(rentalSpace));
-        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(any(), any(), any()))
-                .thenReturn(true);
+        AccommodationAccessTestSupport.stubMembership(
+                spaceMembershipRepository, callerId, spaceId, rentalSpace, com.countin.countin_backend.member.domain.model.MembershipRole.MANAGER);
 
         BulkCreateUnitsRequest request = new BulkCreateUnitsRequest();
         setField(request, "count", AccommodationLimits.MAX_UNITS_PER_BULK + 1);

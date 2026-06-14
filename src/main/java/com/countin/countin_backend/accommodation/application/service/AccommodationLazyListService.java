@@ -37,7 +37,7 @@ public class AccommodationLazyListService {
             UUID spaceId, UUID buildingId, UUID callerId, String query, Pageable pageable) {
         log.info("Listing floors (lazy): spaceId={}, buildingId={}, callerId={}", spaceId, buildingId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         assertBuildingInSpace(spaceId, buildingId);
 
         Page<FloorListItemResponse> page = lazyListRepository.findFloorListItemsByBuildingId(
@@ -50,7 +50,7 @@ public class AccommodationLazyListService {
             UUID spaceId, UUID callerId, String query, Pageable pageable) {
         log.info("Searching floors (lazy): spaceId={}, callerId={}", spaceId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         Page<FloorListItemResponse> page = lazyListRepository.findFloorListItemsBySpaceId(
                 spaceId, normalizeQuery(query), AccommodationStatus.AVAILABLE, AccommodationStatus.OCCUPIED, pageable);
@@ -67,7 +67,7 @@ public class AccommodationLazyListService {
             Pageable pageable) {
         log.info("Listing units (lazy): spaceId={}, buildingId={}, callerId={}", spaceId, buildingId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         assertBuildingInSpace(spaceId, buildingId);
 
         Page<UnitListItemResponse> page = lazyListRepository.findUnitListItemsByBuildingId(
@@ -87,7 +87,7 @@ public class AccommodationLazyListService {
         log.info("Listing units by floor (lazy): spaceId={}, floorId={}, callerId={}",
                 spaceId, floorId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         assertBuildingInSpace(spaceId, buildingId);
         assertFloorInBuilding(buildingId, floorId);
 
@@ -101,7 +101,7 @@ public class AccommodationLazyListService {
             UUID spaceId, UUID callerId, String query, Pageable pageable) {
         log.info("Searching units (lazy): spaceId={}, callerId={}", spaceId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         Page<UnitListItemResponse> page = lazyListRepository.findUnitListItemsBySpaceId(
                 spaceId, normalizeQuery(query), false, pageable);
@@ -113,7 +113,7 @@ public class AccommodationLazyListService {
             UUID spaceId, UUID floorId, UUID callerId, String query, Pageable pageable) {
         log.info("Listing rooms by floor (lazy): spaceId={}, floorId={}, callerId={}", spaceId, floorId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         assertFloorInSpace(spaceId, floorId);
 
         Page<RoomListItemResponse> page = lazyListRepository.findRoomListItemsByFloorId(
@@ -126,7 +126,7 @@ public class AccommodationLazyListService {
             UUID spaceId, UUID unitId, UUID callerId, String query, Pageable pageable) {
         log.info("Listing rooms by unit (lazy): spaceId={}, unitId={}, callerId={}", spaceId, unitId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         assertUnitInSpace(spaceId, unitId);
 
         Page<RoomListItemResponse> page = lazyListRepository.findRoomListItemsByUnitId(
@@ -139,7 +139,7 @@ public class AccommodationLazyListService {
             UUID spaceId, UUID callerId, String query, Pageable pageable) {
         log.info("Searching rooms (lazy): spaceId={}, callerId={}", spaceId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
 
         Page<RoomListItemResponse> page = lazyListRepository.findRoomListItemsBySpaceId(
                 spaceId, normalizeQuery(query), AccommodationStatus.AVAILABLE, AccommodationStatus.OCCUPIED, pageable);
@@ -151,7 +151,7 @@ public class AccommodationLazyListService {
             UUID spaceId, UUID roomId, UUID callerId, Pageable pageable) {
         log.info("Listing beds (lazy): spaceId={}, roomId={}, callerId={}", spaceId, roomId, callerId);
 
-        accessService.assertCallerBelongsToSpace(spaceId, callerId);
+        accessService.assertCanViewStructure(spaceId, callerId);
         assertRoomInSpace(spaceId, roomId);
 
         Page<BedListItemResponse> page = lazyListRepository.findBedListItemsByRoomId(roomId, pageable);
