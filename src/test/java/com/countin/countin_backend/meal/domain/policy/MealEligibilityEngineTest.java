@@ -15,6 +15,32 @@ import org.junit.jupiter.api.Test;
 class MealEligibilityEngineTest {
 
     @Test
+    void mealPlanCovers_breakfastCodeCoversBreakfastOnly() {
+        MealPlanEntity breakfastPlan = MealPlanEntity.builder()
+                .code(MealPlanCode.BREAKFAST)
+                .breakfastIncluded(true)
+                .lunchIncluded(false)
+                .dinnerIncluded(false)
+                .build();
+
+        assertThat(MealEligibilityEngine.mealPlanCovers(breakfastPlan, MealType.BREAKFAST)).isTrue();
+        assertThat(MealEligibilityEngine.mealPlanCovers(breakfastPlan, MealType.LUNCH)).isFalse();
+    }
+
+    @Test
+    void mealPlanCovers_customPlanUsesInclusionFlags() {
+        MealPlanEntity customLunchOnly = MealPlanEntity.builder()
+                .code(MealPlanCode.CUSTOM)
+                .breakfastIncluded(false)
+                .lunchIncluded(true)
+                .dinnerIncluded(false)
+                .build();
+
+        assertThat(MealEligibilityEngine.mealPlanCovers(customLunchOnly, MealType.LUNCH)).isTrue();
+        assertThat(MealEligibilityEngine.mealPlanCovers(customLunchOnly, MealType.DINNER)).isFalse();
+    }
+
+    @Test
     void isEligibleForPollAudience_fullPlanCoversAllMealTypes() {
         MemberEntity member = activeMember();
         MealParticipationEntity participation = participation(fullPlan(), MealParticipationStatus.ACTIVE);

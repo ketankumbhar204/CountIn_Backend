@@ -1,6 +1,5 @@
 package com.countin.countin_backend.meal.domain.policy;
 
-import com.countin.countin_backend.meal.domain.model.MealPlanCode;
 import com.countin.countin_backend.meal.domain.model.MealParticipationStatus;
 import com.countin.countin_backend.meal.domain.model.MealType;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealParticipationEntity;
@@ -14,16 +13,17 @@ public final class MealEligibilityEngine {
     private MealEligibilityEngine() {}
 
     public static boolean mealPlanCovers(MealPlanEntity plan, MealType mealType) {
-        if (plan.getCode() == MealPlanCode.NONE) {
-            return false;
-        }
-        if (plan.getCode() == MealPlanCode.FULL) {
-            return true;
-        }
-        return switch (mealType) {
-            case BREAKFAST -> plan.isBreakfastIncluded();
-            case LUNCH -> plan.isLunchIncluded();
-            case DINNER -> plan.isDinnerIncluded();
+        return switch (plan.getCode()) {
+            case NONE -> false;
+            case FULL -> true;
+            case BREAKFAST -> mealType == MealType.BREAKFAST;
+            case LUNCH -> mealType == MealType.LUNCH;
+            case DINNER -> mealType == MealType.DINNER;
+            case CUSTOM -> switch (mealType) {
+                case BREAKFAST -> plan.isBreakfastIncluded();
+                case LUNCH -> plan.isLunchIncluded();
+                case DINNER -> plan.isDinnerIncluded();
+            };
         };
     }
 

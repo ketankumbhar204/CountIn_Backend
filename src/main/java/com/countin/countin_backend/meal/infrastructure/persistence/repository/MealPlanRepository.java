@@ -17,5 +17,9 @@ public interface MealPlanRepository extends JpaRepository<MealPlanEntity, UUID> 
 
     Optional<MealPlanEntity> findBySpaceIdAndCode(UUID spaceId, MealPlanCode code);
 
+    Optional<MealPlanEntity> findFirstBySpaceIdAndCodeOrderBySortOrderAsc(UUID spaceId, MealPlanCode code);
+
+    boolean existsBySpaceIdAndCode(UUID spaceId, MealPlanCode code);
+
     boolean existsBySpaceId(UUID spaceId);
 }

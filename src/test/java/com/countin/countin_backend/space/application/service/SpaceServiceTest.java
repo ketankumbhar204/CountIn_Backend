@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.meal.application.service.MealPlanService;
 import com.countin.countin_backend.meal.application.service.MealSpaceSetupService;
 import com.countin.countin_backend.member.application.service.MemberMasterService;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
@@ -58,6 +59,9 @@ class SpaceServiceTest {
 
     @Mock
     private MealSpaceSetupService mealSpaceSetupService;
+
+    @Mock
+    private MealPlanService mealPlanService;
 
     @InjectMocks
     private SpaceService spaceService;

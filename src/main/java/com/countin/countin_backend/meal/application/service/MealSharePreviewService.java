@@ -23,6 +23,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MealSharePreviewService {
 
+    private static final String NOT_PUBLISHED_LABEL = "(not published)";
     private static final DateTimeFormatter DATE_FORMAT =
             DateTimeFormatter.ofPattern("EEEE, d MMM yyyy", Locale.ENGLISH);
 
@@ -53,40 +55,56 @@ public class MealSharePreviewService {
                 .findById(spaceId)
                 .orElseThrow(() -> new BusinessException("Space not found", HttpStatus.NOT_FOUND));
 
-        List<DailyMenuEntity> publishedMenus = dailyMenuRepository
-                .findBySpaceAndDate(spaceId, menuDate, true, DailyMenuStatus.PUBLISHED)
-                .stream()
-                .filter(menu -> mealType == null || menu.getMealType() == mealType)
-                .toList();
-
-        if (publishedMenus.isEmpty()) {
-            throw new BusinessException("No published menus found for the selected date", HttpStatus.NOT_FOUND);
-        }
-
+        List<MealType> targetTypes = mealType != null ? List.of(mealType) : List.of(MealType.values());
         List<MealParticipationEntity> participations = participationRepository.findAllNonStoppedBySpaceId(spaceId);
         List<MealSharePreviewSlotResponse> slots = new ArrayList<>();
-        for (DailyMenuEntity menu : publishedMenus) {
-            int eligibleCount = countEligible(participations, menuDate, menu.getMealType());
-            slots.add(MealSharePreviewSlotResponse.builder()
-                    .mealType(menu.getMealType())
-                    .dailyMenuId(menu.getId())
-                    .lines(buildLines(menu))
-                    .notes(menu.getNotes())
-                    .eligibleCount(eligibleCount)
-                    .build());
+
+        for (MealType type : targetTypes) {
+            Optional<DailyMenuEntity> publishedMenu = dailyMenuRepository
+                    .findBySpaceDateAndType(spaceId, menuDate, type)
+                    .filter(menu -> !menu.isDeleted() && menu.getStatus() == DailyMenuStatus.PUBLISHED);
+
+            if (publishedMenu.isPresent()) {
+                DailyMenuEntity menu = publishedMenu.get();
+                slots.add(MealSharePreviewSlotResponse.builder()
+                        .mealType(type)
+                        .dailyMenuId(menu.getId())
+                        .lines(buildLines(menu))
+                        .notes(menu.getNotes())
+                        .eligibleCount(countEligible(participations, menuDate, type))
+                        .build());
+            } else if (mealType != null) {
+                slots.add(MealSharePreviewSlotResponse.builder()
+                        .mealType(type)
+                        .lines(List.of(MealSharePreviewLineResponse.builder()
+                                .label(NOT_PUBLISHED_LABEL)
+                                .build()))
+                        .eligibleCount(countEligible(participations, menuDate, type))
+                        .build());
+            }
         }
 
-        DailyMenuEntity primaryMenu = publishedMenus.get(0);
-        int primaryEligibleCount = slots.get(0).getEligibleCount();
+        if (slots.isEmpty()) {
+            throw new BusinessException(
+                    "No published menus to share for this date", HttpStatus.BAD_REQUEST);
+        }
+
+        DailyMenuEntity primaryPublished = slots.stream()
+                .map(MealSharePreviewSlotResponse::getDailyMenuId)
+                .filter(id -> id != null)
+                .findFirst()
+                .flatMap(id -> dailyMenuRepository.findById(id))
+                .orElse(null);
+
         String messageText = buildMessageText(space.getName(), menuDate, mealType, slots);
 
         return MealSharePreviewResponse.builder()
                 .spaceName(space.getName())
                 .menuDate(menuDate)
-                .mealType(mealType != null ? mealType : (publishedMenus.size() == 1 ? primaryMenu.getMealType() : null))
-                .dailyMenuId(mealType != null || publishedMenus.size() == 1 ? primaryMenu.getId() : null)
-                .status(DailyMenuStatus.PUBLISHED)
-                .eligibleCount(primaryEligibleCount)
+                .mealType(mealType != null ? mealType : (targetTypes.size() == 1 ? targetTypes.get(0) : null))
+                .dailyMenuId(primaryPublished != null ? primaryPublished.getId() : null)
+                .status(primaryPublished != null ? DailyMenuStatus.PUBLISHED : null)
+                .eligibleCount(slots.isEmpty() ? 0 : slots.get(0).getEligibleCount())
                 .messageText(messageText)
                 .slots(slots)
                 .build();
@@ -140,12 +158,11 @@ public class MealSharePreviewService {
             if (mealType == null && slots.size() > 1) {
                 message.append(formatMealType(slot.getMealType())).append('\n');
             }
-            for (MealSharePreviewLineResponse line : slot.getLines()) {
-                message.append("• ").append(line.getLabel());
-                if (line.getDetail() != null && !line.getDetail().isBlank()) {
-                    message.append('\n').append("  ").append(line.getDetail());
-                }
-                message.append('\n');
+            if (slot.getLines().size() == 1
+                    && NOT_PUBLISHED_LABEL.equals(slot.getLines().get(0).getLabel())) {
+                message.append(NOT_PUBLISHED_LABEL).append('\n');
+            } else {
+                appendNumberedSlotOptions(message, slot);
             }
             if (slot.getNotes() != null && !slot.getNotes().isBlank()) {
                 message.append("Note: ").append(slot.getNotes()).append('\n');
@@ -170,5 +187,24 @@ public class MealSharePreviewService {
     private String formatMealType(MealType mealType) {
         String name = mealType.name().toLowerCase(Locale.ENGLISH);
         return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+    }
+
+    private void appendNumberedSlotOptions(StringBuilder message, MealSharePreviewSlotResponse slot) {
+        int optionNum = 1;
+        for (MealSharePreviewLineResponse line : slot.getLines()) {
+            message.append(optionNum).append(". ").append(line.getLabel()).append('\n');
+            if (line.getDetail() != null && !line.getDetail().isBlank()) {
+                message.append(formatDetailForShare(line.getDetail())).append('\n');
+            }
+            optionNum++;
+        }
+        message.append(optionNum)
+                .append(". Not available for ")
+                .append(formatMealType(slot.getMealType()))
+                .append('\n');
+    }
+
+    private String formatDetailForShare(String detail) {
+        return detail.replace(" · ", ", ");
     }
 }

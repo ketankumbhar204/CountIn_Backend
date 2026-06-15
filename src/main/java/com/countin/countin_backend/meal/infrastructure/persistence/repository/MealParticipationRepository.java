@@ -34,17 +34,35 @@ public interface MealParticipationRepository extends JpaRepository<MealParticipa
             @Param("memberId") UUID memberId,
             @Param("status") MealParticipationStatus status);
 
-    @Query("""
+    @Query(
+            value = """
             SELECT p FROM MealParticipationEntity p
-            JOIN FETCH p.member m
-            JOIN FETCH p.mealPlan
+            JOIN p.member m
+            JOIN p.mealPlan
             WHERE p.space.id = :spaceId
               AND (:status IS NULL OR p.status = :status)
               AND (:planCode IS NULL OR p.mealPlan.code = :planCode)
               AND (:memberId IS NULL OR p.member.id = :memberId)
-              AND (:search IS NULL OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', :search, '%'))
-                   OR m.mobileNumber LIKE CONCAT('%', :search, '%'))
+              AND (
+                  :search IS NULL OR :search = ''
+                  OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', :search, '%'))
+                  OR m.mobileNumber LIKE CONCAT('%', :search, '%')
+              )
             ORDER BY m.fullName ASC
+            """,
+            countQuery = """
+            SELECT COUNT(p) FROM MealParticipationEntity p
+            JOIN p.member m
+            JOIN p.mealPlan
+            WHERE p.space.id = :spaceId
+              AND (:status IS NULL OR p.status = :status)
+              AND (:planCode IS NULL OR p.mealPlan.code = :planCode)
+              AND (:memberId IS NULL OR p.member.id = :memberId)
+              AND (
+                  :search IS NULL OR :search = ''
+                  OR LOWER(m.fullName) LIKE LOWER(CONCAT('%', :search, '%'))
+                  OR m.mobileNumber LIKE CONCAT('%', :search, '%')
+              )
             """)
     Page<MealParticipationEntity> search(
             @Param("spaceId") UUID spaceId,

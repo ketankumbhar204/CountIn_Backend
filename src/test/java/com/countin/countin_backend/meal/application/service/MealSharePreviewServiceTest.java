@@ -1,7 +1,6 @@
 package com.countin.countin_backend.meal.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.countin.countin_backend.common.exception.BusinessException;
@@ -88,6 +87,38 @@ class MealSharePreviewServiceTest {
     }
 
     @Test
+    void getSharePreview_omitsUnpublishedSlotsForFullDayPreview() {
+        stubOwnerMembership();
+        SpaceEntity space = space();
+        when(spaceRepository.findById(spaceId)).thenReturn(Optional.of(space));
+        when(participationRepository.findAllNonStoppedBySpaceId(spaceId)).thenReturn(List.of());
+
+        DailyMenuEntity publishedBreakfast = DailyMenuEntity.builder()
+                .space(space)
+                .menuDate(menuDate)
+                .mealType(MealType.BREAKFAST)
+                .status(DailyMenuStatus.PUBLISHED)
+                .isDeleted(false)
+                .build();
+        publishedBreakfast.setId(UUID.randomUUID());
+
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.BREAKFAST))
+                .thenReturn(Optional.of(publishedBreakfast));
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
+                .thenReturn(Optional.empty());
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.DINNER))
+                .thenReturn(Optional.empty());
+        when(dailyMenuEntryRepository.findByDailyMenuId(publishedBreakfast.getId())).thenReturn(List.of());
+        when(dailyMenuRepository.findById(publishedBreakfast.getId())).thenReturn(Optional.of(publishedBreakfast));
+
+        var preview = mealSharePreviewService.getSharePreview(spaceId, callerId, menuDate, null);
+
+        assertThat(preview.getSlots()).hasSize(1);
+        assertThat(preview.getSlots().get(0).getMealType()).isEqualTo(MealType.BREAKFAST);
+        assertThat(preview.getMessageText()).doesNotContain("(not published)");
+    }
+
+    @Test
     void getSharePreview_includesComboDetailAndEligibleCount() {
         stubOwnerMembership();
         SpaceEntity space = space();
@@ -106,8 +137,7 @@ class MealSharePreviewServiceTest {
                 .build();
         published.setId(UUID.randomUUID());
 
-        when(dailyMenuRepository.findBySpaceAndDate(spaceId, menuDate, true, DailyMenuStatus.PUBLISHED))
-                .thenReturn(List.of(published));
+        published.setId(UUID.randomUUID());
 
         DailyMenuEntryEntity comboEntry = DailyMenuEntryEntity.builder()
                 .dailyMenu(published)
@@ -118,7 +148,10 @@ class MealSharePreviewServiceTest {
                 .isAvailable(true)
                 .build();
 
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
+                .thenReturn(Optional.of(published));
         when(dailyMenuEntryRepository.findByDailyMenuId(published.getId())).thenReturn(List.of(comboEntry));
+        when(dailyMenuRepository.findById(published.getId())).thenReturn(Optional.of(published));
 
         FoodItemEntity chapati = FoodItemEntity.builder().name("Chapati").isActive(true).build();
         FoodItemEntity dal = FoodItemEntity.builder().name("Dal Fry").isActive(true).build();
@@ -137,22 +170,25 @@ class MealSharePreviewServiceTest {
         assertThat(preview.getEligibleCount()).isEqualTo(1);
         assertThat(preview.getSlots()).hasSize(1);
         assertThat(preview.getSlots().get(0).getLines().get(0).getDetail()).isEqualTo("Chapati · Dal Fry");
-        assertThat(preview.getMessageText()).contains("Standard Lunch Thali");
-        assertThat(preview.getMessageText()).contains("Chapati · Dal Fry");
+        assertThat(preview.getMessageText()).contains("1. Standard Lunch Thali");
+        assertThat(preview.getMessageText()).contains("Chapati, Dal Fry");
+        assertThat(preview.getMessageText()).contains("2. Not available for Lunch");
         assertThat(preview.getMessageText()).contains("Eligible participants: 1");
     }
 
     @Test
-    void getSharePreview_rejectsWhenNoPublishedMenus() {
+    void getSharePreview_marksSingleUnpublishedSlot() {
         stubOwnerMembership();
         when(spaceRepository.findById(spaceId)).thenReturn(Optional.of(space()));
-        when(dailyMenuRepository.findBySpaceAndDate(spaceId, menuDate, true, DailyMenuStatus.PUBLISHED))
-                .thenReturn(List.of());
+        when(participationRepository.findAllNonStoppedBySpaceId(spaceId)).thenReturn(List.of());
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
+                .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() ->
-                        mealSharePreviewService.getSharePreview(spaceId, callerId, menuDate, MealType.LUNCH))
-                .isInstanceOf(BusinessException.class)
-                .hasMessage("No published menus found for the selected date");
+        var preview = mealSharePreviewService.getSharePreview(spaceId, callerId, menuDate, MealType.LUNCH);
+
+        assertThat(preview.getSlots()).hasSize(1);
+        assertThat(preview.getSlots().get(0).getLines().get(0).getLabel()).isEqualTo("(not published)");
+        assertThat(preview.getMessageText()).contains("(not published)");
     }
 
     private MealParticipationEntity participation(LocalDate date) {

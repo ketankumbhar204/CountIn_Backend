@@ -32,7 +32,7 @@ public class MealPlanService {
     private final SpaceRepository spaceRepository;
     private final MealAccessService mealAccessService;
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<MealPlanResponse> listPlans(UUID spaceId, UUID callerId) {
         mealAccessService.requireViewMeals(spaceId, callerId);
         ensurePresetPlans(spaceId);
@@ -85,14 +85,16 @@ public class MealPlanService {
 
     @Transactional
     public MealPlanEntity ensurePresetPlans(UUID spaceId) {
-        if (mealPlanRepository.existsBySpaceId(spaceId)) {
-            return mealPlanRepository
-                    .findBySpaceIdAndCode(spaceId, MealPlanCode.FULL)
-                    .orElseThrow();
-        }
         SpaceEntity space = loadSpace(spaceId);
+        MealPlanEntity fullPlan = null;
         for (PresetPlan preset : PRESET_PLANS) {
-            mealPlanRepository.save(MealPlanEntity.builder()
+            if (mealPlanRepository.existsBySpaceIdAndCode(spaceId, preset.code())) {
+                if (preset.code() == MealPlanCode.FULL) {
+                    fullPlan = resolvePlanByCode(spaceId, MealPlanCode.FULL);
+                }
+                continue;
+            }
+            MealPlanEntity saved = mealPlanRepository.save(MealPlanEntity.builder()
                     .space(space)
                     .code(preset.code())
                     .name(preset.name())
@@ -102,10 +104,21 @@ public class MealPlanService {
                     .sortOrder(preset.sortOrder())
                     .isActive(true)
                     .build());
+            if (preset.code() == MealPlanCode.FULL) {
+                fullPlan = saved;
+            }
         }
+        mealPlanRepository.flush();
+        if (fullPlan == null) {
+            fullPlan = resolvePlanByCode(spaceId, MealPlanCode.FULL);
+        }
+        return fullPlan;
+    }
+
+    private MealPlanEntity resolvePlanByCode(UUID spaceId, MealPlanCode code) {
         return mealPlanRepository
-                .findBySpaceIdAndCode(spaceId, MealPlanCode.FULL)
-                .orElseThrow();
+                .findFirstBySpaceIdAndCodeOrderBySortOrderAsc(spaceId, code)
+                .orElseThrow(() -> new ResourceNotFoundException("MealPlan", "code", code));
     }
 
     public MealPlanEntity loadPlan(UUID spaceId, UUID planId) {
