@@ -2,12 +2,18 @@ package com.countin.countin_backend.meal.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.countin.countin_backend.common.exception.BusinessException;
+import com.countin.countin_backend.meal.api.dto.request.CreateComboInlineItemRequest;
+import com.countin.countin_backend.meal.api.dto.request.CreateMealComboRequest;
 import com.countin.countin_backend.meal.domain.model.FoodScope;
+import com.countin.countin_backend.meal.infrastructure.persistence.entity.FoodItemEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboEntity;
+import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboItemEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealComboItemRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealComboRepository;
 import com.countin.countin_backend.member.application.service.SpaceMembershipResolver;
@@ -72,6 +78,45 @@ class MealComboServiceTest {
     }
 
     @Test
+    void createCombo_withInlineNewItems_createsItemsAndCombo() {
+        stubOwnerMembership();
+        SpaceEntity space = space();
+        when(spaceRepository.findById(spaceId)).thenReturn(Optional.of(space));
+        UUID categoryId = UUID.randomUUID();
+        UUID newItemId = UUID.randomUUID();
+        CreateMealComboRequest request = new CreateMealComboRequest();
+        request.setName("Sunday Special");
+        request.setDescription("Mess only");
+        CreateComboInlineItemRequest inlineItem = new CreateComboInlineItemRequest();
+        inlineItem.setCategoryId(categoryId);
+        inlineItem.setName("Mess Special Dal");
+        request.setNewItems(List.of(inlineItem));
+
+        when(mealComboRepository.save(any(MealComboEntity.class))).thenAnswer(invocation -> {
+            MealComboEntity combo = invocation.getArgument(0);
+            combo.setId(UUID.randomUUID());
+            return combo;
+        });
+        when(foodCatalogService.createItem(any(), any(), any())).thenAnswer(invocation -> {
+            var response = com.countin.countin_backend.meal.api.dto.response.FoodItemResponse.builder()
+                    .itemId(newItemId)
+                    .name("Mess Special Dal")
+                    .build();
+            return response;
+        });
+        when(foodCatalogService.loadEnabledItemForSpace(spaceId, newItemId))
+                .thenReturn(FoodItemEntity.builder().name("Mess Special Dal").build());
+        when(mealComboItemRepository.findByComboIdWithItems(any())).thenReturn(List.of());
+
+        mealComboService.createCombo(spaceId, callerId, request);
+
+        verify(foodCatalogService).createItem(eq(spaceId), eq(callerId), org.mockito.ArgumentMatchers.argThat(
+                itemRequest -> itemRequest.getCategoryId().equals(categoryId)
+                        && itemRequest.getName().equals("Mess Special Dal")));
+        verify(mealComboItemRepository).save(any(MealComboItemEntity.class));
+    }
+
+    @Test
     void deactivateCombo_setsInactive() {
         stubOwnerMembership();
         SpaceEntity space = space();
@@ -102,7 +147,7 @@ class MealComboServiceTest {
     }
 
     @Test
-    void backfillMessCombos_createsSampleCombos_whenEmpty() {
+    void backfillSampleCombos_createsSampleCombos_whenEmpty() {
         stubOwnerMembership();
         SpaceEntity space = space();
         when(spaceRepository.findById(spaceId)).thenReturn(Optional.of(space));
@@ -129,7 +174,7 @@ class MealComboServiceTest {
 
         var combos = mealComboService.listCombos(spaceId, callerId);
 
-        verify(mealSpaceSetupService).ensureMessSampleCombos(space);
+        verify(mealSpaceSetupService).ensureSampleCombos(space);
         assertThat(combos).hasSizeGreaterThanOrEqualTo(2);
         assertThat(combos).extracting("name").contains("Standard Lunch Thali", "Dal Rice Combo");
         assertThat(combos).allMatch(combo -> combo.getScope() == FoodScope.SPACE);

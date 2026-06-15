@@ -100,7 +100,7 @@ class FoodCatalogServiceTest {
         assertThat(responses.get(0).getName()).isEqualTo("Breads");
         assertThat(responses.get(0).getScope()).isEqualTo(FoodScope.GLOBAL);
         assertThat(responses.get(0).getItemCount()).isEqualTo(8);
-        verify(mealSpaceSetupService).ensureMessSampleCombos(any(SpaceEntity.class));
+        verify(mealSpaceSetupService).ensureSampleCombos(any(SpaceEntity.class));
     }
 
     @Test

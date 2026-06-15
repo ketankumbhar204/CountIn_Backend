@@ -72,7 +72,7 @@ public class SpaceService {
         memberMasterService.linkMemberToMembership(
                 ownerMembership, owner.getFullName(), owner.getMobileNumber());
 
-        mealSpaceSetupService.ensureMessSampleCombos(space);
+        mealSpaceSetupService.ensureSampleCombos(space);
 
         return SpaceMapper.toCreateResponse(space);
     }

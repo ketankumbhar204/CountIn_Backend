@@ -5,7 +5,6 @@ import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealCo
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.FoodItemRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealComboItemRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealComboRepository;
-import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import java.util.List;
 import java.util.UUID;
@@ -29,8 +28,8 @@ public class MealSpaceSetupService {
     private final FoodItemRepository foodItemRepository;
 
     @Transactional
-    public void ensureMessSampleCombos(SpaceEntity space) {
-        if (space.getType() != SpaceType.MESS) {
+    public void ensureSampleCombos(SpaceEntity space) {
+        if (!space.isActive()) {
             return;
         }
         if (!mealComboRepository.findBySpaceIdAndIsActiveTrueOrderByNameAsc(space.getId()).isEmpty()) {
@@ -38,12 +37,12 @@ public class MealSpaceSetupService {
         }
         if (foodItemRepository.findGlobalByName("Chapati").isEmpty()) {
             log.warn(
-                    "Cannot seed MESS sample combos for space {} — global food catalog is missing. "
+                    "Cannot seed sample combos for space {} — global food catalog is missing. "
                             + "Apply Flyway V40 or V43.",
                     space.getId());
             return;
         }
-        log.info("Seeding sample meal combos for MESS space {}", space.getId());
+        log.info("Seeding sample meal combos for space {} ({})", space.getId(), space.getType());
         createCombo(
                 space,
                 "Standard Lunch Thali",

@@ -1,6 +1,9 @@
 package com.countin.countin_backend.meal.application.service;
 
+import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.meal.api.dto.request.CreateComboInlineItemRequest;
+import com.countin.countin_backend.meal.api.dto.request.CreateFoodItemRequest;
 import com.countin.countin_backend.meal.api.dto.request.CreateMealComboRequest;
 import com.countin.countin_backend.meal.api.dto.request.UpdateMealComboRequest;
 import com.countin.countin_backend.meal.api.dto.response.MealComboResponse;
@@ -10,6 +13,7 @@ import com.countin.countin_backend.meal.infrastructure.persistence.repository.Me
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealComboRepository;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +35,7 @@ public class MealComboService {
     public List<MealComboResponse> listCombos(UUID spaceId, UUID callerId) {
         mealAccessService.requireViewMeals(spaceId, callerId);
         SpaceEntity space = loadSpace(spaceId);
-        mealSpaceSetupService.ensureMessSampleCombos(space);
+        mealSpaceSetupService.ensureSampleCombos(space);
         return mealComboRepository.findBySpaceIdAndIsActiveTrueOrderByNameAsc(spaceId).stream()
                 .map(combo -> MealComboResponse.from(combo, mealComboItemRepository.findByComboIdWithItems(combo.getId())))
                 .toList();
@@ -47,7 +51,7 @@ public class MealComboService {
                 .description(request.getDescription())
                 .isActive(true)
                 .build());
-        saveComboItems(spaceId, combo, request.getItemIds());
+        saveComboItems(spaceId, callerId, combo, request.getItemIds(), request.getNewItems());
         return MealComboResponse.from(combo, mealComboItemRepository.findByComboIdWithItems(combo.getId()));
     }
 
@@ -61,7 +65,7 @@ public class MealComboService {
             combo.setActive(request.getActive());
         }
         mealComboItemRepository.deleteByComboId(comboId);
-        saveComboItems(spaceId, combo, request.getItemIds());
+        saveComboItems(spaceId, callerId, combo, request.getItemIds(), request.getNewItems());
         return MealComboResponse.from(combo, mealComboItemRepository.findByComboIdWithItems(combo.getId()));
     }
 
@@ -79,15 +83,44 @@ public class MealComboService {
                 .orElseThrow(() -> new ResourceNotFoundException("MealCombo", "id", comboId));
     }
 
-    private void saveComboItems(UUID spaceId, MealComboEntity combo, List<UUID> itemIds) {
+    private void saveComboItems(
+            UUID spaceId,
+            UUID callerId,
+            MealComboEntity combo,
+            List<UUID> itemIds,
+            List<CreateComboInlineItemRequest> newItems) {
+        List<UUID> resolvedItemIds = resolveItemIds(spaceId, callerId, itemIds, newItems);
         int sortOrder = 0;
-        for (UUID itemId : itemIds) {
+        for (UUID itemId : resolvedItemIds) {
             mealComboItemRepository.save(MealComboItemEntity.builder()
                     .combo(combo)
                     .item(foodCatalogService.loadEnabledItemForSpace(spaceId, itemId))
                     .sortOrder(sortOrder++)
                     .build());
         }
+    }
+
+    private List<UUID> resolveItemIds(
+            UUID spaceId,
+            UUID callerId,
+            List<UUID> itemIds,
+            List<CreateComboInlineItemRequest> newItems) {
+        List<UUID> resolved = new ArrayList<>();
+        if (itemIds != null) {
+            resolved.addAll(itemIds);
+        }
+        if (newItems != null) {
+            for (CreateComboInlineItemRequest newItem : newItems) {
+                CreateFoodItemRequest itemRequest = new CreateFoodItemRequest();
+                itemRequest.setCategoryId(newItem.getCategoryId());
+                itemRequest.setName(newItem.getName());
+                resolved.add(foodCatalogService.createItem(spaceId, callerId, itemRequest).getItemId());
+            }
+        }
+        if (resolved.isEmpty()) {
+            throw new BusinessException("Combo must include at least one item");
+        }
+        return resolved;
     }
 
     private SpaceEntity loadSpace(UUID spaceId) {

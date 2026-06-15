@@ -1,7 +1,8 @@
 package com.countin.countin_backend.meal.api.dto.request;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import lombok.Getter;
@@ -18,6 +19,8 @@ public class UpdateMealComboRequest {
 
     private Boolean active;
 
-    @NotEmpty
-    private List<UUID> itemIds;
+    private List<UUID> itemIds = new ArrayList<>();
+
+    @Valid
+    private List<CreateComboInlineItemRequest> newItems = new ArrayList<>();
 }

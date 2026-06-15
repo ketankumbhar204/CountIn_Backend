@@ -47,7 +47,7 @@ public class FoodCatalogService {
         mealAccessService.requireViewMeals(spaceId, callerId);
         SpaceEntity space = loadSpace(spaceId);
         ensureGlobalCatalogPresent();
-        mealSpaceSetupService.ensureMessSampleCombos(space);
+        mealSpaceSetupService.ensureSampleCombos(space);
         Map<UUID, Long> itemCountsByCategory = foodItemRepository.countVisibleItemsGroupedByCategory(spaceId).stream()
                 .collect(Collectors.toMap(
                         FoodItemRepository.CategoryItemCount::getCategoryId,
