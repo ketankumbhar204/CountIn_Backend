@@ -96,8 +96,8 @@ Base: `/api/v1/spaces/{spaceId}/meal-polls`
 ### Operator
 
 1. Publish daily menu
-2. **Share menu** — numbered WhatsApp text
-3. **Open poll** per published slot (Menu Planning card)
+2. **Share menu** — numbered WhatsApp text **and auto-opens in-app polls** for selected meals
+3. Optional: **Close poll** on Menu Planning when cutoff time passes
 4. (6D) Headcount dashboard — per option breakdown (next)
 
 ### Member (TENANT / CUSTOMER)

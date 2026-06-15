@@ -1,10 +1,12 @@
 package com.countin.countin_backend.member.api.controller;
 
+import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.security.SecurityUtils;
 import com.countin.countin_backend.common.web.ApiResponse;
 import com.countin.countin_backend.member.api.dto.request.AcceptInvitationRequest;
 import com.countin.countin_backend.member.api.dto.request.CreateInvitationRequest;
 import com.countin.countin_backend.member.api.dto.response.InvitationResponse;
+import com.countin.countin_backend.member.api.dto.response.MyInvitationResponse;
 import com.countin.countin_backend.member.api.dto.response.SpaceMembershipResponse;
 import com.countin.countin_backend.member.application.service.InvitationService;
 import com.countin.countin_backend.member.application.service.MembershipService;
@@ -12,11 +14,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,6 +37,17 @@ public class InvitationController {
     private final InvitationService invitationService;
     private final MembershipService membershipService;
 
+    @GetMapping("/my")
+    @Operation(
+            summary = "List my pending invitations",
+            description = "Returns pending invitations for the signed-in user's mobile number.")
+    public ResponseEntity<ApiResponse<List<MyInvitationResponse>>> getMyInvitations() {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Invitations fetched successfully",
+                invitationService.getMyPendingInvitations(callerId)));
+    }
+
     @PostMapping
     @Operation(summary = "Create invitation", description = "Sends an invitation to join a space. OWNER or MANAGER only.")
     public ResponseEntity<ApiResponse<InvitationResponse>> createInvitation(
@@ -48,7 +63,12 @@ public class InvitationController {
     public ResponseEntity<ApiResponse<SpaceMembershipResponse>> acceptInvitation(
             @PathVariable UUID id,
             @RequestBody @Valid AcceptInvitationRequest request) {
-        SpaceMembershipResponse response = invitationService.acceptInvitation(id, request.getUserId());
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        if (!callerId.equals(request.getUserId())) {
+            throw new BusinessException(
+                    "You can only accept invitations for your own account", HttpStatus.FORBIDDEN);
+        }
+        SpaceMembershipResponse response = invitationService.acceptInvitation(id, callerId);
         return ResponseEntity.ok(ApiResponse.success("Invitation accepted successfully", response));
     }
 

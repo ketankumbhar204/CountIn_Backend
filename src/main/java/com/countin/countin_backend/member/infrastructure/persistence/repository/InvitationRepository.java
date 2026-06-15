@@ -3,6 +3,7 @@ package com.countin.countin_backend.member.infrastructure.persistence.repository
 import com.countin.countin_backend.member.domain.model.InvitationStatus;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.InvitationEntity;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,6 +30,18 @@ public interface InvitationRepository extends JpaRepository<InvitationEntity, UU
 
     boolean existsBySpaceIdAndMobileNumberAndStatus(
             UUID spaceId, String mobileNumber, InvitationStatus status);
+
+    @Query("""
+            SELECT i FROM InvitationEntity i
+            JOIN FETCH i.space
+            JOIN FETCH i.invitedBy
+            WHERE i.mobileNumber = :mobileNumber
+              AND i.status = com.countin.countin_backend.member.domain.model.InvitationStatus.PENDING
+              AND i.expiresAt > :now
+            ORDER BY i.createdAt DESC
+            """)
+    List<InvitationEntity> findActivePendingByMobileNumber(
+            @Param("mobileNumber") String mobileNumber, @Param("now") LocalDateTime now);
 
     @Query("""
             SELECT i FROM InvitationEntity i

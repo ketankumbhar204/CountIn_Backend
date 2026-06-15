@@ -4,6 +4,7 @@ import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
 import com.countin.countin_backend.member.api.dto.request.CreateInvitationRequest;
 import com.countin.countin_backend.member.api.dto.response.InvitationResponse;
+import com.countin.countin_backend.member.api.dto.response.MyInvitationResponse;
 import com.countin.countin_backend.member.api.dto.response.SpaceMembershipResponse;
 import com.countin.countin_backend.member.domain.model.InvitationStatus;
 import com.countin.countin_backend.member.application.service.MemberMasterService;
@@ -76,6 +77,20 @@ public class InvitationService {
         return InvitationResponse.from(invitation);
     }
 
+    @Transactional(readOnly = true)
+    public List<MyInvitationResponse> getMyPendingInvitations(UUID userId) {
+        UserEntity user = userRepository
+                .findByIdAndIsActiveTrue(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        LocalDateTime now = LocalDateTime.now();
+        return invitationRepository.findActivePendingByMobileNumber(user.getMobileNumber(), now).stream()
+                .filter(invitation -> !spaceMembershipRepository.existsByUserIdAndSpaceIdAndStatus(
+                        userId, invitation.getSpace().getId(), MembershipStatus.ACTIVE))
+                .map(MyInvitationResponse::from)
+                .toList();
+    }
+
     @Transactional
     public SpaceMembershipResponse acceptInvitation(UUID invitationId, UUID userId) {
         InvitationEntity invitation = invitationRepository.findById(invitationId)
@@ -94,6 +109,11 @@ public class InvitationService {
 
         UserEntity user = userRepository.findByIdAndIsActiveTrue(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        if (!invitation.getMobileNumber().equals(user.getMobileNumber())) {
+            throw new BusinessException(
+                    "This invitation was sent to a different mobile number", HttpStatus.FORBIDDEN);
+        }
 
         boolean alreadyMember = spaceMembershipRepository.existsByUserIdAndSpaceIdAndStatus(
                 userId, invitation.getSpace().getId(), MembershipStatus.ACTIVE);
@@ -118,11 +138,8 @@ public class InvitationService {
         invitation.setAcceptedAt(LocalDateTime.now());
         invitationRepository.save(invitation);
 
-        if (membership.getRole() == MembershipRole.OWNER
-                || membership.getRole() == MembershipRole.MANAGER) {
-            memberMasterService.linkMemberToMembership(
-                    membership, user.getFullName(), user.getMobileNumber());
-        }
+        memberMasterService.linkMemberToMembership(
+                membership, user.getFullName(), user.getMobileNumber());
 
         return SpaceMembershipResponse.from(membership);
     }
