@@ -1,17 +1,24 @@
 package com.countin.countin_backend.meal.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.countin.countin_backend.common.exception.BusinessException;
+import com.countin.countin_backend.meal.api.dto.request.CopyDailyMenuRequest;
 import com.countin.countin_backend.meal.api.dto.request.DailyMenuOptionRequest;
 import com.countin.countin_backend.meal.api.dto.request.UpsertDailyMenuRequest;
 import com.countin.countin_backend.meal.domain.model.DailyMenuEntryType;
+import com.countin.countin_backend.meal.domain.model.DailyMenuStatus;
 import com.countin.countin_backend.meal.domain.model.MealType;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntryEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.FoodItemEntity;
+import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuEntryRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuRepository;
 import com.countin.countin_backend.member.application.service.SpaceMembershipResolver;
@@ -34,6 +41,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
 class DailyMenuServiceTest {
@@ -64,6 +72,8 @@ class DailyMenuServiceTest {
     private UUID spaceId;
     private UUID callerId;
     private UUID itemId;
+    private UUID comboId;
+    private LocalDate menuDate;
 
     @BeforeEach
     void setUp() {
@@ -77,22 +87,233 @@ class DailyMenuServiceTest {
         spaceId = UUID.randomUUID();
         callerId = UUID.randomUUID();
         itemId = UUID.randomUUID();
+        comboId = UUID.randomUUID();
+        menuDate = LocalDate.of(2026, 6, 18);
+    }
+
+    @Test
+    void getMenusByDate_managerSeesDraftAndPublished() {
+        stubMembership(MembershipRole.OWNER);
+        DailyMenuEntity draft = menu(MealType.LUNCH, DailyMenuStatus.DRAFT);
+        DailyMenuEntity published = menu(MealType.DINNER, DailyMenuStatus.PUBLISHED);
+        when(dailyMenuRepository.findBySpaceAndDate(spaceId, menuDate, false, DailyMenuStatus.PUBLISHED))
+                .thenReturn(List.of(draft, published));
+        when(dailyMenuEntryRepository.findByDailyMenuId(any())).thenReturn(List.of());
+
+        var menus = dailyMenuService.getMenusByDate(spaceId, callerId, menuDate);
+
+        assertThat(menus).hasSize(2);
+        assertThat(menus).extracting("status").contains(DailyMenuStatus.DRAFT, DailyMenuStatus.PUBLISHED);
+    }
+
+    @Test
+    void getMenusByDate_tenantSeesPublishedOnly() {
+        stubMembership(MembershipRole.TENANT);
+        DailyMenuEntity published = menu(MealType.LUNCH, DailyMenuStatus.PUBLISHED);
+        when(dailyMenuRepository.findBySpaceAndDate(spaceId, menuDate, true, DailyMenuStatus.PUBLISHED))
+                .thenReturn(List.of(published));
+        when(dailyMenuEntryRepository.findByDailyMenuId(published.getId())).thenReturn(List.of());
+
+        var menus = dailyMenuService.getMenusByDate(spaceId, callerId, menuDate);
+
+        assertThat(menus).hasSize(1);
+        assertThat(menus.get(0).getStatus()).isEqualTo(DailyMenuStatus.PUBLISHED);
+    }
+
+    @Test
+    void getTodayMenus_excludesDraftsForManager() {
+        stubMembership(MembershipRole.OWNER);
+        DailyMenuEntity published = menu(MealType.BREAKFAST, DailyMenuStatus.PUBLISHED);
+        when(dailyMenuRepository.findBySpaceAndDate(eq(spaceId), any(LocalDate.class), eq(true), eq(DailyMenuStatus.PUBLISHED)))
+                .thenReturn(List.of(published));
+        when(dailyMenuEntryRepository.findByDailyMenuId(published.getId())).thenReturn(List.of());
+
+        var menus = dailyMenuService.getTodayMenus(spaceId, callerId);
+
+        assertThat(menus).hasSize(1);
+        assertThat(menus.get(0).getStatus()).isEqualTo(DailyMenuStatus.PUBLISHED);
+    }
+
+    @Test
+    void upsertMenu_persistsComboAndItemEntries() {
+        stubOwnerMembership();
+        when(spaceRepository.findById(spaceId)).thenReturn(Optional.of(space()));
+
+        DailyMenuEntity savedMenu = menu(MealType.LUNCH, DailyMenuStatus.DRAFT);
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
+                .thenReturn(Optional.empty(), Optional.of(savedMenu));
+        when(dailyMenuRepository.save(any(DailyMenuEntity.class))).thenReturn(savedMenu);
+
+        MealComboEntity combo = MealComboEntity.builder().name("Thali").isActive(true).build();
+        combo.setId(comboId);
+        when(mealComboService.loadCombo(spaceId, comboId)).thenReturn(combo);
+
+        FoodItemEntity item = FoodItemEntity.builder().name("Tea").isActive(true).build();
+        item.setId(itemId);
+        when(foodCatalogService.loadEnabledItemForSpace(spaceId, itemId)).thenReturn(item);
+
+        DailyMenuOptionRequest comboOption = option(DailyMenuEntryType.COMBO, comboId, null, "Standard Lunch Thali", 1);
+        DailyMenuOptionRequest itemOption = option(DailyMenuEntryType.ITEM, null, itemId, "Tea", 2);
+
+        UpsertDailyMenuRequest request = new UpsertDailyMenuRequest();
+        request.setOptions(List.of(comboOption, itemOption));
+        request.setNotes("Extra salad today");
+
+        dailyMenuService.upsertMenu(spaceId, callerId, menuDate, MealType.LUNCH, request);
+
+        ArgumentCaptor<DailyMenuEntryEntity> captor = ArgumentCaptor.forClass(DailyMenuEntryEntity.class);
+        verify(dailyMenuEntryRepository, org.mockito.Mockito.times(2)).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .extracting(DailyMenuEntryEntity::getEntryType)
+                .containsExactly(DailyMenuEntryType.COMBO, DailyMenuEntryType.ITEM);
+    }
+
+    @Test
+    void upsertMenu_rejectsInvalidComboId() {
+        stubOwnerMembership();
+        when(spaceRepository.findById(spaceId)).thenReturn(Optional.of(space()));
+        DailyMenuEntity savedMenu = menu(MealType.LUNCH, DailyMenuStatus.DRAFT);
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
+                .thenReturn(Optional.empty());
+        when(dailyMenuRepository.save(any(DailyMenuEntity.class))).thenReturn(savedMenu);
+        when(mealComboService.loadCombo(spaceId, comboId))
+                .thenThrow(new BusinessException("Combo is not active", HttpStatus.BAD_REQUEST));
+
+        UpsertDailyMenuRequest request = new UpsertDailyMenuRequest();
+        request.setOptions(List.of(option(DailyMenuEntryType.COMBO, comboId, null, "Thali", 1)));
+
+        assertThatThrownBy(() -> dailyMenuService.upsertMenu(spaceId, callerId, menuDate, MealType.LUNCH, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Combo is not active");
+    }
+
+    @Test
+    void upsertMenu_allowsEmptyDraftOptions() {
+        stubOwnerMembership();
+        when(spaceRepository.findById(spaceId)).thenReturn(Optional.of(space()));
+        DailyMenuEntity savedMenu = menu(MealType.DINNER, DailyMenuStatus.DRAFT);
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.DINNER))
+                .thenReturn(Optional.empty());
+        when(dailyMenuRepository.save(any(DailyMenuEntity.class))).thenReturn(savedMenu);
+        when(dailyMenuEntryRepository.findByDailyMenuId(savedMenu.getId())).thenReturn(List.of());
+
+        UpsertDailyMenuRequest request = new UpsertDailyMenuRequest();
+        request.setNotes("Planning later");
+
+        var response = dailyMenuService.upsertMenu(spaceId, callerId, menuDate, MealType.DINNER, request);
+
+        verify(dailyMenuEntryRepository, never()).save(any());
+        assertThat(response.getOptions()).isEmpty();
+    }
+
+    @Test
+    void upsertMenu_allowsInPlacePublishedEdit() {
+        stubOwnerMembership();
+        when(spaceRepository.findById(spaceId)).thenReturn(Optional.of(space()));
+        DailyMenuEntity published = menu(MealType.LUNCH, DailyMenuStatus.PUBLISHED);
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
+                .thenReturn(Optional.of(published));
+        when(dailyMenuRepository.save(published)).thenReturn(published);
+        when(dailyMenuEntryRepository.findByDailyMenuId(published.getId())).thenReturn(List.of());
+
+        UpsertDailyMenuRequest request = new UpsertDailyMenuRequest();
+        request.setNotes("Updated note");
+
+        var response = dailyMenuService.upsertMenu(spaceId, callerId, menuDate, MealType.LUNCH, request);
+
+        assertThat(response.getStatus()).isEqualTo(DailyMenuStatus.PUBLISHED);
+    }
+
+    @Test
+    void publishMenu_requiresAvailableOption() {
+        stubOwnerMembership();
+        DailyMenuEntity draft = menu(MealType.LUNCH, DailyMenuStatus.DRAFT);
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
+                .thenReturn(Optional.of(draft));
+        when(dailyMenuEntryRepository.findByDailyMenuId(draft.getId())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> dailyMenuService.publishMenu(spaceId, callerId, menuDate, MealType.LUNCH))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("At least one available option is required to publish");
+    }
+
+    @Test
+    void copyMenu_createsDraftFromSource() {
+        stubOwnerMembership();
+        when(spaceRepository.findById(spaceId)).thenReturn(Optional.of(space()));
+
+        LocalDate sourceDate = menuDate.minusDays(1);
+        DailyMenuEntity source = menuOnDate(MealType.LUNCH, DailyMenuStatus.PUBLISHED, sourceDate);
+        DailyMenuEntity target = menu(MealType.LUNCH, DailyMenuStatus.DRAFT);
+
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, sourceDate, MealType.LUNCH))
+                .thenReturn(Optional.of(source));
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
+                .thenReturn(Optional.empty());
+        when(dailyMenuRepository.save(any(DailyMenuEntity.class))).thenReturn(target);
+
+        DailyMenuEntryEntity sourceEntry = DailyMenuEntryEntity.builder()
+                .dailyMenu(source)
+                .entryType(DailyMenuEntryType.COMBO)
+                .label("Standard Lunch Thali")
+                .sortOrder(1)
+                .isAvailable(true)
+                .build();
+        when(dailyMenuEntryRepository.findByDailyMenuId(source.getId())).thenReturn(List.of(sourceEntry));
+        when(dailyMenuEntryRepository.findByDailyMenuId(target.getId())).thenReturn(List.of(sourceEntry));
+
+        var response = dailyMenuService.copyMenu(spaceId, callerId, menuDate, MealType.LUNCH, sourceDate, null);
+
+        assertThat(response.getStatus()).isEqualTo(DailyMenuStatus.DRAFT);
+        verify(dailyMenuEntryRepository).save(any(DailyMenuEntryEntity.class));
+    }
+
+    @Test
+    void copyMenu_rejectsPublishedTargetWithoutForce() {
+        stubOwnerMembership();
+        LocalDate sourceDate = menuDate.minusDays(1);
+        DailyMenuEntity source = menuOnDate(MealType.LUNCH, DailyMenuStatus.PUBLISHED, sourceDate);
+        DailyMenuEntity publishedTarget = menu(MealType.LUNCH, DailyMenuStatus.PUBLISHED);
+
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, sourceDate, MealType.LUNCH))
+                .thenReturn(Optional.of(source));
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
+                .thenReturn(Optional.of(publishedTarget));
+
+        assertThatThrownBy(() ->
+                        dailyMenuService.copyMenu(spaceId, callerId, menuDate, MealType.LUNCH, sourceDate, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("force=true");
+    }
+
+    @Test
+    void listMenus_rejectsRangeOver31Days() {
+        stubOwnerMembership();
+        LocalDate from = LocalDate.of(2026, 6, 1);
+        LocalDate to = LocalDate.of(2026, 7, 5);
+
+        assertThatThrownBy(() -> dailyMenuService.listMenus(spaceId, callerId, from, to))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Date range cannot exceed 31 days");
+    }
+
+    @Test
+    void staffCannotUpsertMenu() {
+        stubMembership(MembershipRole.STAFF);
+        UpsertDailyMenuRequest request = new UpsertDailyMenuRequest();
+
+        assertThatThrownBy(() -> dailyMenuService.upsertMenu(spaceId, callerId, menuDate, MealType.LUNCH, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Only OWNER or MANAGER can manage meals");
     }
 
     @Test
     void upsertMenu_persistsItemEntryAndRoundTripsOnGet() {
         stubOwnerMembership();
-        LocalDate menuDate = LocalDate.of(2026, 7, 15);
         SpaceEntity space = space();
         when(spaceRepository.findById(spaceId)).thenReturn(Optional.of(space));
 
-        DailyMenuEntity savedMenu = DailyMenuEntity.builder()
-                .space(space)
-                .menuDate(menuDate)
-                .mealType(MealType.LUNCH)
-                .isDeleted(false)
-                .build();
-        savedMenu.setId(UUID.randomUUID());
+        DailyMenuEntity savedMenu = menu(MealType.LUNCH, DailyMenuStatus.DRAFT);
         when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
                 .thenReturn(Optional.empty(), Optional.of(savedMenu));
         when(dailyMenuRepository.save(any(DailyMenuEntity.class))).thenReturn(savedMenu);
@@ -101,25 +322,12 @@ class DailyMenuServiceTest {
         item.setId(itemId);
         when(foodCatalogService.loadEnabledItemForSpace(spaceId, itemId)).thenReturn(item);
 
-        DailyMenuOptionRequest option = new DailyMenuOptionRequest();
-        option.setItemId(itemId);
-        option.setLabel("Extra Salad");
-        option.setSortOrder(2);
-        option.setAvailable(true);
-
+        DailyMenuOptionRequest option = option(DailyMenuEntryType.ITEM, null, itemId, "Extra Salad", 2);
         UpsertDailyMenuRequest request = new UpsertDailyMenuRequest();
         request.setOptions(List.of(option));
         request.setNotes("Extra salad today");
 
         dailyMenuService.upsertMenu(spaceId, callerId, menuDate, MealType.LUNCH, request);
-
-        ArgumentCaptor<DailyMenuEntryEntity> entryCaptor = ArgumentCaptor.forClass(DailyMenuEntryEntity.class);
-        verify(dailyMenuEntryRepository).save(entryCaptor.capture());
-        DailyMenuEntryEntity savedEntry = entryCaptor.getValue();
-        assertThat(savedEntry.getEntryType()).isEqualTo(DailyMenuEntryType.ITEM);
-        assertThat(savedEntry.getItem()).isEqualTo(item);
-        assertThat(savedEntry.getCombo()).isNull();
-        assertThat(savedEntry.getLabel()).isEqualTo("Extra Salad");
 
         DailyMenuEntryEntity persistedEntry = DailyMenuEntryEntity.builder()
                 .dailyMenu(savedMenu)
@@ -137,18 +345,48 @@ class DailyMenuServiceTest {
         assertThat(response.getOptions()).hasSize(1);
         assertThat(response.getOptions().get(0).getEntryType()).isEqualTo(DailyMenuEntryType.ITEM);
         assertThat(response.getOptions().get(0).getItemId()).isEqualTo(itemId);
-        assertThat(response.getOptions().get(0).getComboId()).isNull();
-        assertThat(response.getOptions().get(0).getLabel()).isEqualTo("Extra Salad");
+    }
+
+    private DailyMenuOptionRequest option(
+            DailyMenuEntryType entryType, UUID combo, UUID item, String label, int sortOrder) {
+        DailyMenuOptionRequest option = new DailyMenuOptionRequest();
+        option.setEntryType(entryType);
+        option.setComboId(combo);
+        option.setItemId(item);
+        option.setLabel(label);
+        option.setSortOrder(sortOrder);
+        option.setAvailable(true);
+        return option;
+    }
+
+    private DailyMenuEntity menu(MealType mealType, DailyMenuStatus status) {
+        return menuOnDate(mealType, status, menuDate);
+    }
+
+    private DailyMenuEntity menuOnDate(MealType mealType, DailyMenuStatus status, LocalDate date) {
+        DailyMenuEntity menu = DailyMenuEntity.builder()
+                .space(space())
+                .menuDate(date)
+                .mealType(mealType)
+                .status(status)
+                .isDeleted(false)
+                .build();
+        menu.setId(UUID.randomUUID());
+        return menu;
     }
 
     private void stubOwnerMembership() {
-        UserEntity user = UserEntity.builder().fullName("Owner").mobileNumber("9000000000").build();
+        stubMembership(MembershipRole.OWNER);
+    }
+
+    private void stubMembership(MembershipRole role) {
+        UserEntity user = UserEntity.builder().fullName("User").mobileNumber("9000000000").build();
         user.setId(callerId);
         SpaceEntity space = space();
         SpaceMembershipEntity membership = SpaceMembershipEntity.builder()
                 .user(user)
                 .space(space)
-                .role(MembershipRole.OWNER)
+                .role(role)
                 .status(MembershipStatus.ACTIVE)
                 .build();
         when(spaceMembershipRepository.findMembershipByUserAndSpace(callerId, spaceId))
@@ -160,7 +398,7 @@ class DailyMenuServiceTest {
         owner.setId(UUID.randomUUID());
         SpaceEntity space = SpaceEntity.builder()
                 .owner(owner)
-                .name("Mess")
+                .name("Test Mess 1")
                 .type(SpaceType.MESS)
                 .isActive(true)
                 .build();

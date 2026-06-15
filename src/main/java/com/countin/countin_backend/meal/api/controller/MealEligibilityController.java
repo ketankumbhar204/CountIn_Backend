@@ -4,7 +4,9 @@ import com.countin.countin_backend.common.security.SecurityUtils;
 import com.countin.countin_backend.common.web.ApiResponse;
 import com.countin.countin_backend.meal.api.dto.response.EligibleParticipantResponse;
 import com.countin.countin_backend.meal.api.dto.response.MealEligibilitySummaryResponse;
+import com.countin.countin_backend.meal.api.dto.response.MealSharePreviewResponse;
 import com.countin.countin_backend.meal.application.service.MealEligibilityService;
+import com.countin.countin_backend.meal.application.service.MealSharePreviewService;
 import com.countin.countin_backend.meal.domain.model.MealType;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MealEligibilityController {
 
     private final MealEligibilityService mealEligibilityService;
+    private final MealSharePreviewService mealSharePreviewService;
 
     @GetMapping("/eligibility-summary")
     public ResponseEntity<ApiResponse<MealEligibilitySummaryResponse>> getSummary(
@@ -47,5 +50,16 @@ public class MealEligibilityController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Eligible participants fetched successfully",
                 mealEligibilityService.listEligibleParticipants(spaceId, callerId, date, mealType)));
+    }
+
+    @GetMapping("/share-preview")
+    public ResponseEntity<ApiResponse<MealSharePreviewResponse>> getSharePreview(
+            @org.springframework.web.bind.annotation.PathVariable UUID spaceId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) MealType mealType) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Meal share preview fetched successfully",
+                mealSharePreviewService.getSharePreview(spaceId, callerId, date, mealType)));
     }
 }

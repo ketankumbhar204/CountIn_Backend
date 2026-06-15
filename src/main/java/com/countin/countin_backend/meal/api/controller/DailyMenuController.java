@@ -2,6 +2,7 @@ package com.countin.countin_backend.meal.api.controller;
 
 import com.countin.countin_backend.common.security.SecurityUtils;
 import com.countin.countin_backend.common.web.ApiResponse;
+import com.countin.countin_backend.meal.api.dto.request.CopyDailyMenuRequest;
 import com.countin.countin_backend.meal.api.dto.request.UpsertDailyMenuRequest;
 import com.countin.countin_backend.meal.api.dto.response.DailyMenuResponse;
 import com.countin.countin_backend.meal.application.service.DailyMenuService;
@@ -51,6 +52,15 @@ public class DailyMenuController {
                 "Today's menus fetched successfully", dailyMenuService.getTodayMenus(spaceId, callerId)));
     }
 
+    @GetMapping("/{date}")
+    public ResponseEntity<ApiResponse<List<DailyMenuResponse>>> getMenusByDate(
+            @PathVariable UUID spaceId,
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Daily menus fetched successfully", dailyMenuService.getMenusByDate(spaceId, callerId, date)));
+    }
+
     @GetMapping("/{date}/{mealType}")
     public ResponseEntity<ApiResponse<DailyMenuResponse>> getMenu(
             @PathVariable UUID spaceId,
@@ -82,6 +92,19 @@ public class DailyMenuController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Daily menu published successfully",
                 dailyMenuService.publishMenu(spaceId, callerId, date, mealType)));
+    }
+
+    @PostMapping("/{targetDate}/{mealType}/copy-from/{sourceDate}")
+    public ResponseEntity<ApiResponse<DailyMenuResponse>> copyMenu(
+            @PathVariable UUID spaceId,
+            @PathVariable("targetDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate targetDate,
+            @PathVariable MealType mealType,
+            @PathVariable("sourceDate") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate sourceDate,
+            @RequestBody(required = false) CopyDailyMenuRequest request) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Daily menu copied successfully",
+                dailyMenuService.copyMenu(spaceId, callerId, targetDate, mealType, sourceDate, request)));
     }
 
     @DeleteMapping("/{date}/{mealType}")

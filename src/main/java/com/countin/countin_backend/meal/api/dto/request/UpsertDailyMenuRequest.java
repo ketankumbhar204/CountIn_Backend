@@ -1,10 +1,8 @@
 package com.countin.countin_backend.meal.api.dto.request;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -12,9 +10,8 @@ import lombok.Setter;
 @Setter
 public class UpsertDailyMenuRequest {
 
-    @NotEmpty
     @Valid
-    private List<DailyMenuOptionRequest> options;
+    private List<DailyMenuOptionRequest> options = new ArrayList<>();
 
     private String notes;
 }

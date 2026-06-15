@@ -2,6 +2,7 @@ package com.countin.countin_backend.meal.application.service;
 
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.meal.api.dto.request.CopyDailyMenuRequest;
 import com.countin.countin_backend.meal.api.dto.request.DailyMenuOptionRequest;
 import com.countin.countin_backend.meal.api.dto.request.UpsertDailyMenuRequest;
 import com.countin.countin_backend.meal.api.dto.response.DailyMenuResponse;
@@ -19,6 +20,8 @@ import com.countin.countin_backend.space.infrastructure.persistence.entity.Space
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DailyMenuService {
 
+    private static final int MAX_DATE_RANGE_DAYS = 31;
+
     private final DailyMenuRepository dailyMenuRepository;
     private final DailyMenuEntryRepository dailyMenuEntryRepository;
     private final MealComboService mealComboService;
@@ -40,7 +45,8 @@ public class DailyMenuService {
     @Transactional(readOnly = true)
     public List<DailyMenuResponse> listMenus(UUID spaceId, UUID callerId, LocalDate from, LocalDate to) {
         SpaceMembershipEntity membership = mealAccessService.requireViewMeals(spaceId, callerId);
-        boolean publishedOnly = mealAccessService.isParticipantScopeOnly(membership);
+        validateDateRange(from, to);
+        boolean publishedOnly = !mealAccessService.canManageMeals(membership);
         return dailyMenuRepository.findBySpaceAndDateRange(spaceId, from, to, publishedOnly).stream()
                 .map(this::toResponse)
                 .toList();
@@ -48,20 +54,40 @@ public class DailyMenuService {
 
     @Transactional(readOnly = true)
     public List<DailyMenuResponse> getTodayMenus(UUID spaceId, UUID callerId) {
-        return listMenus(spaceId, callerId, LocalDate.now(), LocalDate.now());
+        mealAccessService.requireViewMeals(spaceId, callerId);
+        return dailyMenuRepository
+                .findBySpaceAndDate(spaceId, LocalDate.now(), true, DailyMenuStatus.PUBLISHED)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<DailyMenuResponse> getMenusByDate(UUID spaceId, UUID callerId, LocalDate date) {
+        SpaceMembershipEntity membership = mealAccessService.requireViewMeals(spaceId, callerId);
+        boolean publishedOnly = !mealAccessService.canManageMeals(membership);
+        return dailyMenuRepository
+                .findBySpaceAndDate(spaceId, date, publishedOnly, DailyMenuStatus.PUBLISHED)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Transactional(readOnly = true)
     public DailyMenuResponse getMenu(UUID spaceId, UUID callerId, LocalDate date, MealType mealType) {
         SpaceMembershipEntity membership = mealAccessService.requireViewMeals(spaceId, callerId);
         DailyMenuEntity menu = loadMenu(spaceId, date, mealType);
-        if (mealAccessService.isParticipantScopeOnly(membership)
+        if (!mealAccessService.canManageMeals(membership)
                 && menu.getStatus() != DailyMenuStatus.PUBLISHED) {
             throw new BusinessException("Daily menu is not published yet", HttpStatus.NOT_FOUND);
         }
         return toResponse(menu);
     }
 
+    /**
+     * Upserts a daily menu. New menus start as DRAFT. Published menus can be edited in-place without
+     * reverting to draft (MVP published-edit policy).
+     */
     @Transactional
     public DailyMenuResponse upsertMenu(
             UUID spaceId, UUID callerId, LocalDate date, MealType mealType, UpsertDailyMenuRequest request) {
@@ -82,14 +108,13 @@ public class DailyMenuService {
             menu.setStatus(DailyMenuStatus.DRAFT);
             menu.setPublishedAt(null);
         }
-        if (menu.getStatus() == DailyMenuStatus.PUBLISHED) {
-            throw new BusinessException("Published menus cannot be edited; delete draft first");
-        }
 
         menu.setNotes(request.getNotes());
         menu = dailyMenuRepository.save(menu);
         dailyMenuEntryRepository.deleteByDailyMenuId(menu.getId());
-        saveEntries(spaceId, menu, request.getOptions());
+        List<DailyMenuOptionRequest> options =
+                request.getOptions() != null ? request.getOptions() : Collections.emptyList();
+        saveEntries(spaceId, menu, options);
         return toResponse(menu);
     }
 
@@ -99,6 +124,11 @@ public class DailyMenuService {
         DailyMenuEntity menu = loadMenu(spaceId, date, mealType);
         if (menu.getStatus() == DailyMenuStatus.PUBLISHED) {
             return toResponse(menu);
+        }
+        List<DailyMenuEntryEntity> entries = dailyMenuEntryRepository.findByDailyMenuId(menu.getId());
+        if (entries.stream().noneMatch(DailyMenuEntryEntity::isAvailable)) {
+            throw new BusinessException(
+                    "At least one available option is required to publish", HttpStatus.BAD_REQUEST);
         }
         menu.setStatus(DailyMenuStatus.PUBLISHED);
         menu.setPublishedAt(LocalDateTime.now());
@@ -110,10 +140,68 @@ public class DailyMenuService {
         mealAccessService.requireManageMeals(spaceId, callerId);
         DailyMenuEntity menu = loadMenu(spaceId, date, mealType);
         if (menu.getStatus() == DailyMenuStatus.PUBLISHED) {
-            throw new BusinessException("Published menus cannot be deleted");
+            throw new BusinessException("Published menus cannot be deleted", HttpStatus.CONFLICT);
         }
         menu.setDeleted(true);
         dailyMenuRepository.save(menu);
+    }
+
+    @Transactional
+    public DailyMenuResponse copyMenu(
+            UUID spaceId,
+            UUID callerId,
+            LocalDate targetDate,
+            MealType mealType,
+            LocalDate sourceDate,
+            CopyDailyMenuRequest request) {
+        mealAccessService.requireManageMeals(spaceId, callerId);
+        DailyMenuEntity source = dailyMenuRepository
+                .findBySpaceDateAndType(spaceId, sourceDate, mealType)
+                .filter(menu -> !menu.isDeleted())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "DailyMenu", "date/mealType", sourceDate + "/" + mealType));
+
+        boolean force = request != null && request.isForce();
+        DailyMenuEntity target = dailyMenuRepository
+                .findBySpaceDateAndType(spaceId, targetDate, mealType)
+                .filter(menu -> !menu.isDeleted())
+                .orElse(null);
+
+        if (target != null && target.getStatus() == DailyMenuStatus.PUBLISHED && !force) {
+            throw new BusinessException(
+                    "Target menu is published; set force=true to overwrite", HttpStatus.CONFLICT);
+        }
+
+        SpaceEntity space = loadSpace(spaceId);
+        if (target == null) {
+            target = DailyMenuEntity.builder()
+                    .space(space)
+                    .menuDate(targetDate)
+                    .mealType(mealType)
+                    .isDeleted(false)
+                    .build();
+        }
+
+        target.setStatus(DailyMenuStatus.DRAFT);
+        target.setPublishedAt(null);
+        target.setNotes(source.getNotes());
+        target = dailyMenuRepository.save(target);
+
+        dailyMenuEntryRepository.deleteByDailyMenuId(target.getId());
+        for (DailyMenuEntryEntity sourceEntry :
+                dailyMenuEntryRepository.findByDailyMenuId(source.getId())) {
+            dailyMenuEntryRepository.save(DailyMenuEntryEntity.builder()
+                    .dailyMenu(target)
+                    .entryType(sourceEntry.getEntryType())
+                    .combo(sourceEntry.getCombo())
+                    .item(sourceEntry.getItem())
+                    .label(sourceEntry.getLabel())
+                    .sortOrder(sourceEntry.getSortOrder())
+                    .isAvailable(sourceEntry.isAvailable())
+                    .build());
+        }
+
+        return toResponse(target);
     }
 
     public boolean isPublished(UUID spaceId, LocalDate date, MealType mealType) {
@@ -139,16 +227,17 @@ public class DailyMenuService {
         for (DailyMenuOptionRequest option : options) {
             MealComboEntity combo = null;
             FoodItemEntity item = null;
-            DailyMenuEntryType entryType;
-            if (option.getComboId() != null) {
+            DailyMenuEntryType entryType = resolveEntryType(option);
+
+            if (entryType == DailyMenuEntryType.COMBO) {
                 combo = mealComboService.loadCombo(spaceId, option.getComboId());
-                entryType = DailyMenuEntryType.COMBO;
-            } else if (option.getItemId() != null) {
-                item = foodCatalogService.loadEnabledItemForSpace(spaceId, option.getItemId());
-                entryType = DailyMenuEntryType.ITEM;
+                if (!combo.isActive()) {
+                    throw new BusinessException("Combo is not active", HttpStatus.BAD_REQUEST);
+                }
             } else {
-                entryType = DailyMenuEntryType.ITEM;
+                item = foodCatalogService.loadEnabledItemForSpace(spaceId, option.getItemId());
             }
+
             dailyMenuEntryRepository.save(DailyMenuEntryEntity.builder()
                     .dailyMenu(menu)
                     .entryType(entryType)
@@ -158,6 +247,47 @@ public class DailyMenuService {
                     .sortOrder(option.getSortOrder())
                     .isAvailable(option.isAvailable())
                     .build());
+        }
+    }
+
+    private DailyMenuEntryType resolveEntryType(DailyMenuOptionRequest option) {
+        if (option.getEntryType() != null) {
+            if (option.getEntryType() == DailyMenuEntryType.COMBO) {
+                if (option.getComboId() == null) {
+                    throw new BusinessException("comboId is required for COMBO entries", HttpStatus.BAD_REQUEST);
+                }
+                if (option.getItemId() != null) {
+                    throw new BusinessException("itemId must be null for COMBO entries", HttpStatus.BAD_REQUEST);
+                }
+                return DailyMenuEntryType.COMBO;
+            }
+            if (option.getItemId() == null) {
+                throw new BusinessException("itemId is required for ITEM entries", HttpStatus.BAD_REQUEST);
+            }
+            if (option.getComboId() != null) {
+                throw new BusinessException("comboId must be null for ITEM entries", HttpStatus.BAD_REQUEST);
+            }
+            return DailyMenuEntryType.ITEM;
+        }
+        if (option.getComboId() != null) {
+            if (option.getItemId() != null) {
+                throw new BusinessException("Provide either comboId or itemId, not both", HttpStatus.BAD_REQUEST);
+            }
+            return DailyMenuEntryType.COMBO;
+        }
+        if (option.getItemId() != null) {
+            return DailyMenuEntryType.ITEM;
+        }
+        throw new BusinessException("entryType or comboId/itemId is required", HttpStatus.BAD_REQUEST);
+    }
+
+    private void validateDateRange(LocalDate from, LocalDate to) {
+        if (from.isAfter(to)) {
+            throw new BusinessException("'from' must be on or before 'to'", HttpStatus.BAD_REQUEST);
+        }
+        long days = ChronoUnit.DAYS.between(from, to) + 1;
+        if (days > MAX_DATE_RANGE_DAYS) {
+            throw new BusinessException("Date range cannot exceed 31 days", HttpStatus.BAD_REQUEST);
         }
     }
 
