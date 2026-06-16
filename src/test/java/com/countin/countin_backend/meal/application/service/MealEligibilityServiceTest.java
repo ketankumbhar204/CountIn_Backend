@@ -127,6 +127,36 @@ class MealEligibilityServiceTest {
         assertThat(lunchSlot.getByPlan()).hasSize(1);
         assertThat(lunchSlot.getByPlan().get(0).getMealPlanCode()).isEqualTo(MealPlanCode.FULL);
         assertThat(lunchSlot.getByPlan().get(0).getCount()).isEqualTo(1);
+        assertThat(summary.getDistinctEligibleMemberCount()).isEqualTo(1);
+    }
+
+    @Test
+    void getSummary_distinctEligibleCount_doesNotSumAcrossMealSlots() {
+        stubOwnerMembership();
+        LocalDate date = LocalDate.of(2026, 7, 15);
+
+        MealParticipationEntity memberOne = participation(
+                "Member One", MealPlanCode.FULL, "Full Meals", MealParticipationStatus.ACTIVE, date);
+        MealParticipationEntity memberTwo = participation(
+                "Member Two", MealPlanCode.FULL, "Full Meals", MealParticipationStatus.ACTIVE, date);
+        MealParticipationEntity memberThree = participation(
+                "Member Three", MealPlanCode.FULL, "Full Meals", MealParticipationStatus.ACTIVE, date);
+
+        when(participationRepository.findAllNonStoppedBySpaceId(spaceId))
+                .thenReturn(List.of(memberOne, memberTwo, memberThree));
+        when(dailyMenuService.isPublished(spaceId, date, MealType.LUNCH)).thenReturn(false);
+        when(dailyMenuService.isPublished(spaceId, date, MealType.BREAKFAST)).thenReturn(false);
+        when(dailyMenuService.isPublished(spaceId, date, MealType.DINNER)).thenReturn(false);
+
+        var summary = mealEligibilityService.getSummary(spaceId, callerId, date);
+
+        assertThat(summary.getDistinctEligibleMemberCount()).isEqualTo(3);
+        assertThat(summary.getSlots()).allMatch(slot -> slot.getEligibleCount() == 3);
+        int summedSlotCounts = summary.getSlots().stream()
+                .mapToInt(slot -> slot.getEligibleCount())
+                .sum();
+        assertThat(summedSlotCounts).isEqualTo(9);
+        assertThat(summary.getDistinctEligibleMemberCount()).isNotEqualTo(summedSlotCounts);
     }
 
     private MealParticipationEntity participation(

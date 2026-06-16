@@ -13,8 +13,10 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -34,6 +36,7 @@ public class MealEligibilityService {
         LocalDate targetDate = date != null ? date : LocalDate.now();
         List<MealParticipationEntity> participations = participationRepository.findAllNonStoppedBySpaceId(spaceId);
         List<MealEligibilitySlotResponse> slots = new ArrayList<>();
+        Set<UUID> distinctEligibleMemberIds = new HashSet<>();
 
         for (MealType mealType : MealType.values()) {
             int eligibleCount = 0;
@@ -44,6 +47,7 @@ public class MealEligibilityService {
                 if (MealEligibilityEngine.isEligibleForPollAudience(
                         participation.getMember(), participation, targetDate, mealType)) {
                     eligibleCount++;
+                    distinctEligibleMemberIds.add(participation.getMember().getId());
                     MealPlanCode planCode = participation.getMealPlan().getCode();
                     byPlanCounts
                             .computeIfAbsent(planCode, code -> new PlanAccumulator(participation.getMealPlan().getName()))
@@ -72,7 +76,11 @@ public class MealEligibilityService {
                     .build());
         }
 
-        return MealEligibilitySummaryResponse.builder().date(targetDate).slots(slots).build();
+        return MealEligibilitySummaryResponse.builder()
+                .date(targetDate)
+                .distinctEligibleMemberCount(distinctEligibleMemberIds.size())
+                .slots(slots)
+                .build();
     }
 
     @Transactional(readOnly = true)

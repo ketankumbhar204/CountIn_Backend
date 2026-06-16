@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,7 +21,9 @@ import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyM
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.FoodItemEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuEntryRepository;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuPackageItemRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuRepository;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealPollOptionRepository;
 import com.countin.countin_backend.member.application.service.SpaceMembershipResolver;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.domain.model.MembershipStatus;
@@ -32,8 +35,10 @@ import com.countin.countin_backend.space.infrastructure.persistence.entity.Space
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
 import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,6 +56,12 @@ class DailyMenuServiceTest {
 
     @Mock
     private DailyMenuEntryRepository dailyMenuEntryRepository;
+
+    @Mock
+    private DailyMenuPackageItemRepository dailyMenuPackageItemRepository;
+
+    @Mock
+    private MealPollOptionRepository mealPollOptionRepository;
 
     @Mock
     private MealComboService mealComboService;
@@ -80,6 +91,8 @@ class DailyMenuServiceTest {
         dailyMenuService = new DailyMenuService(
                 dailyMenuRepository,
                 dailyMenuEntryRepository,
+                dailyMenuPackageItemRepository,
+                mealPollOptionRepository,
                 mealComboService,
                 foodCatalogService,
                 spaceRepository,
@@ -89,6 +102,15 @@ class DailyMenuServiceTest {
         itemId = UUID.randomUUID();
         comboId = UUID.randomUUID();
         menuDate = LocalDate.of(2026, 6, 18);
+        lenient()
+                .when(dailyMenuEntryRepository.save(any(DailyMenuEntryEntity.class)))
+                .thenAnswer(invocation -> {
+                    DailyMenuEntryEntity entry = invocation.getArgument(0);
+                    if (entry.getId() == null) {
+                        entry.setId(UUID.randomUUID());
+                    }
+                    return entry;
+                });
     }
 
     @Test
@@ -143,6 +165,7 @@ class DailyMenuServiceTest {
         when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
                 .thenReturn(Optional.empty(), Optional.of(savedMenu));
         when(dailyMenuRepository.save(any(DailyMenuEntity.class))).thenReturn(savedMenu);
+        stubEmptySync(savedMenu.getId());
 
         MealComboEntity combo = MealComboEntity.builder().name("Thali").isActive(true).build();
         combo.setId(comboId);
@@ -176,6 +199,7 @@ class DailyMenuServiceTest {
         when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
                 .thenReturn(Optional.empty());
         when(dailyMenuRepository.save(any(DailyMenuEntity.class))).thenReturn(savedMenu);
+        stubEmptySync(savedMenu.getId());
         when(mealComboService.loadCombo(spaceId, comboId))
                 .thenThrow(new BusinessException("Combo is not active", HttpStatus.BAD_REQUEST));
 
@@ -195,14 +219,14 @@ class DailyMenuServiceTest {
         when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.DINNER))
                 .thenReturn(Optional.empty());
         when(dailyMenuRepository.save(any(DailyMenuEntity.class))).thenReturn(savedMenu);
-        when(dailyMenuEntryRepository.findByDailyMenuId(savedMenu.getId())).thenReturn(List.of());
+        stubEmptySync(savedMenu.getId());
 
         UpsertDailyMenuRequest request = new UpsertDailyMenuRequest();
         request.setNotes("Planning later");
 
         var response = dailyMenuService.upsertMenu(spaceId, callerId, menuDate, MealType.DINNER, request);
 
-        verify(dailyMenuEntryRepository, never()).save(any());
+        verify(dailyMenuEntryRepository, never()).delete(any());
         assertThat(response.getOptions()).isEmpty();
     }
 
@@ -214,7 +238,7 @@ class DailyMenuServiceTest {
         when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
                 .thenReturn(Optional.of(published));
         when(dailyMenuRepository.save(published)).thenReturn(published);
-        when(dailyMenuEntryRepository.findByDailyMenuId(published.getId())).thenReturn(List.of());
+        stubEmptySync(published.getId());
 
         UpsertDailyMenuRequest request = new UpsertDailyMenuRequest();
         request.setNotes("Updated note");
@@ -251,7 +275,6 @@ class DailyMenuServiceTest {
         when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
                 .thenReturn(Optional.empty());
         when(dailyMenuRepository.save(any(DailyMenuEntity.class))).thenReturn(target);
-
         DailyMenuEntryEntity sourceEntry = DailyMenuEntryEntity.builder()
                 .dailyMenu(source)
                 .entryType(DailyMenuEntryType.COMBO)
@@ -259,8 +282,11 @@ class DailyMenuServiceTest {
                 .sortOrder(1)
                 .isAvailable(true)
                 .build();
+        when(mealPollOptionRepository.findReferencedEntryIdsByDailyMenuId(target.getId()))
+                .thenReturn(Collections.emptySet());
         when(dailyMenuEntryRepository.findByDailyMenuId(source.getId())).thenReturn(List.of(sourceEntry));
-        when(dailyMenuEntryRepository.findByDailyMenuId(target.getId())).thenReturn(List.of(sourceEntry));
+        when(dailyMenuEntryRepository.findByDailyMenuId(target.getId()))
+                .thenReturn(List.of(), List.of(sourceEntry));
 
         var response = dailyMenuService.copyMenu(spaceId, callerId, menuDate, MealType.LUNCH, sourceDate, null);
 
@@ -317,6 +343,7 @@ class DailyMenuServiceTest {
         when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.LUNCH))
                 .thenReturn(Optional.empty(), Optional.of(savedMenu));
         when(dailyMenuRepository.save(any(DailyMenuEntity.class))).thenReturn(savedMenu);
+        stubEmptySync(savedMenu.getId());
 
         FoodItemEntity item = FoodItemEntity.builder().name("Green Salad").isActive(true).build();
         item.setId(itemId);
@@ -345,6 +372,61 @@ class DailyMenuServiceTest {
         assertThat(response.getOptions()).hasSize(1);
         assertThat(response.getOptions().get(0).getEntryType()).isEqualTo(DailyMenuEntryType.ITEM);
         assertThat(response.getOptions().get(0).getItemId()).isEqualTo(itemId);
+    }
+
+    @Test
+    void upsertMenu_marksPollLinkedOrphansUnavailableInsteadOfDeleting() {
+        stubOwnerMembership();
+        when(spaceRepository.findById(spaceId)).thenReturn(Optional.of(space()));
+
+        DailyMenuEntity savedMenu = menu(MealType.BREAKFAST, DailyMenuStatus.PUBLISHED);
+        UUID pollLinkedEntryId = UUID.randomUUID();
+        DailyMenuEntryEntity pollLinked = DailyMenuEntryEntity.builder()
+                .dailyMenu(savedMenu)
+                .entryType(DailyMenuEntryType.COMBO)
+                .label("Old combo")
+                .sortOrder(1)
+                .isAvailable(true)
+                .build();
+        pollLinked.setId(pollLinkedEntryId);
+
+        when(dailyMenuRepository.findBySpaceDateAndType(spaceId, menuDate, MealType.BREAKFAST))
+                .thenReturn(Optional.of(savedMenu));
+        when(dailyMenuRepository.save(savedMenu)).thenReturn(savedMenu);
+        when(dailyMenuEntryRepository.findByDailyMenuId(savedMenu.getId())).thenReturn(List.of(pollLinked));
+        when(mealPollOptionRepository.findReferencedEntryIdsByDailyMenuId(savedMenu.getId()))
+                .thenReturn(Set.of(pollLinkedEntryId));
+
+        MealComboEntity combo = MealComboEntity.builder().name("New combo").isActive(true).build();
+        combo.setId(comboId);
+        when(mealComboService.loadCombo(spaceId, comboId)).thenReturn(combo);
+        when(dailyMenuEntryRepository.save(any(DailyMenuEntryEntity.class)))
+                .thenAnswer(invocation -> {
+                    DailyMenuEntryEntity entry = invocation.getArgument(0);
+                    if (entry.getId() == null) {
+                        entry.setId(UUID.randomUUID());
+                    }
+                    return entry;
+                });
+        when(dailyMenuEntryRepository.findByDailyMenuId(savedMenu.getId()))
+                .thenReturn(List.of(pollLinked), List.of(pollLinked));
+
+        UpsertDailyMenuRequest request = new UpsertDailyMenuRequest();
+        request.setOptions(List.of(option(DailyMenuEntryType.COMBO, comboId, null, "New combo", 1)));
+
+        dailyMenuService.upsertMenu(spaceId, callerId, menuDate, MealType.BREAKFAST, request);
+
+        verify(dailyMenuEntryRepository, never()).delete(any());
+        ArgumentCaptor<DailyMenuEntryEntity> captor = ArgumentCaptor.forClass(DailyMenuEntryEntity.class);
+        verify(dailyMenuEntryRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+        assertThat(captor.getAllValues())
+                .anyMatch(entry -> pollLinkedEntryId.equals(entry.getId()) && !entry.isAvailable());
+    }
+
+    private void stubEmptySync(UUID menuId) {
+        when(dailyMenuEntryRepository.findByDailyMenuId(menuId)).thenReturn(List.of());
+        when(mealPollOptionRepository.findReferencedEntryIdsByDailyMenuId(menuId))
+                .thenReturn(Collections.emptySet());
     }
 
     private DailyMenuOptionRequest option(

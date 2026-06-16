@@ -10,5 +10,7 @@ import lombok.Getter;
 public class MealEligibilitySummaryResponse {
 
     private LocalDate date;
+    /** Unique members eligible for at least one meal slot on this date (not summed across slots). */
+    private int distinctEligibleMemberCount;
     private List<MealEligibilitySlotResponse> slots;
 }

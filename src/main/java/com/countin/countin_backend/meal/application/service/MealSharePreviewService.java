@@ -14,6 +14,7 @@ import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealCo
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealParticipationEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuEntryRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuRepository;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuPackageItemRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealComboItemRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealParticipationRepository;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
@@ -42,6 +43,7 @@ public class MealSharePreviewService {
     private final DailyMenuRepository dailyMenuRepository;
     private final DailyMenuEntryRepository dailyMenuEntryRepository;
     private final MealComboItemRepository mealComboItemRepository;
+    private final DailyMenuPackageItemRepository dailyMenuPackageItemRepository;
     private final MealParticipationRepository participationRepository;
     private final SpaceRepository spaceRepository;
     private final MealAccessService mealAccessService;
@@ -124,6 +126,10 @@ public class MealSharePreviewService {
             detail = mealComboItemRepository.findByComboIdWithItems(entry.getCombo().getId()).stream()
                     .map(MealComboItemEntity::getItem)
                     .map(item -> item.getName())
+                    .collect(Collectors.joining(" · "));
+        } else if (entry.getEntryType() == DailyMenuEntryType.PACKAGE) {
+            detail = dailyMenuPackageItemRepository.findByEntryIdWithItems(entry.getId()).stream()
+                    .map(pi -> pi.getItem().getName())
                     .collect(Collectors.joining(" · "));
         }
         return MealSharePreviewLineResponse.builder()

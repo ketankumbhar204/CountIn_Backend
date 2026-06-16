@@ -17,6 +17,7 @@ import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealCo
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealParticipationEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealPlanEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuEntryRepository;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuPackageItemRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealComboItemRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealParticipationRepository;
@@ -55,6 +56,9 @@ class MealSharePreviewServiceTest {
     private MealComboItemRepository mealComboItemRepository;
 
     @Mock
+    private DailyMenuPackageItemRepository dailyMenuPackageItemRepository;
+
+    @Mock
     private MealParticipationRepository participationRepository;
 
     @Mock
@@ -78,6 +82,7 @@ class MealSharePreviewServiceTest {
                 dailyMenuRepository,
                 dailyMenuEntryRepository,
                 mealComboItemRepository,
+                dailyMenuPackageItemRepository,
                 participationRepository,
                 spaceRepository,
                 new MealAccessService(new SpaceMembershipResolver(spaceMembershipRepository), memberRepository));

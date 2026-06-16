@@ -13,16 +13,22 @@ import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyM
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntryEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.FoodItemEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboEntity;
+import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuPackageItemEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuEntryRepository;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuPackageItemRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuRepository;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealPollOptionRepository;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -37,6 +43,8 @@ public class DailyMenuService {
 
     private final DailyMenuRepository dailyMenuRepository;
     private final DailyMenuEntryRepository dailyMenuEntryRepository;
+    private final DailyMenuPackageItemRepository dailyMenuPackageItemRepository;
+    private final MealPollOptionRepository mealPollOptionRepository;
     private final MealComboService mealComboService;
     private final FoodCatalogService foodCatalogService;
     private final SpaceRepository spaceRepository;
@@ -111,10 +119,9 @@ public class DailyMenuService {
 
         menu.setNotes(request.getNotes());
         menu = dailyMenuRepository.save(menu);
-        dailyMenuEntryRepository.deleteByDailyMenuId(menu.getId());
         List<DailyMenuOptionRequest> options =
                 request.getOptions() != null ? request.getOptions() : Collections.emptyList();
-        saveEntries(spaceId, menu, options);
+        syncEntries(spaceId, menu, options);
         return toResponse(menu);
     }
 
@@ -187,10 +194,10 @@ public class DailyMenuService {
         target.setNotes(source.getNotes());
         target = dailyMenuRepository.save(target);
 
-        dailyMenuEntryRepository.deleteByDailyMenuId(target.getId());
+        removeUnreferencedEntries(target.getId());
         for (DailyMenuEntryEntity sourceEntry :
                 dailyMenuEntryRepository.findByDailyMenuId(source.getId())) {
-            dailyMenuEntryRepository.save(DailyMenuEntryEntity.builder()
+            DailyMenuEntryEntity copied = dailyMenuEntryRepository.save(DailyMenuEntryEntity.builder()
                     .dailyMenu(target)
                     .entryType(sourceEntry.getEntryType())
                     .combo(sourceEntry.getCombo())
@@ -199,6 +206,9 @@ public class DailyMenuService {
                     .sortOrder(sourceEntry.getSortOrder())
                     .isAvailable(sourceEntry.isAvailable())
                     .build());
+            if (sourceEntry.getEntryType() == DailyMenuEntryType.PACKAGE) {
+                copyPackageItems(sourceEntry.getId(), copied);
+            }
         }
 
         return toResponse(target);
@@ -212,7 +222,25 @@ public class DailyMenuService {
     }
 
     private DailyMenuResponse toResponse(DailyMenuEntity menu) {
-        return DailyMenuResponse.from(menu, dailyMenuEntryRepository.findByDailyMenuId(menu.getId()));
+        List<DailyMenuEntryEntity> entries = dailyMenuEntryRepository.findByDailyMenuId(menu.getId());
+        List<com.countin.countin_backend.meal.api.dto.response.DailyMenuOptionResponse> options = new ArrayList<>();
+        for (DailyMenuEntryEntity entry : entries) {
+            if (entry.getEntryType() == DailyMenuEntryType.PACKAGE) {
+                options.add(com.countin.countin_backend.meal.api.dto.response.DailyMenuOptionResponse.from(
+                        entry, dailyMenuPackageItemRepository.findByEntryIdWithItems(entry.getId())));
+            } else {
+                options.add(com.countin.countin_backend.meal.api.dto.response.DailyMenuOptionResponse.from(entry));
+            }
+        }
+        return DailyMenuResponse.builder()
+                .dailyMenuId(menu.getId())
+                .menuDate(menu.getMenuDate())
+                .mealType(menu.getMealType())
+                .status(menu.getStatus())
+                .publishedAt(menu.getPublishedAt())
+                .notes(menu.getNotes())
+                .options(options)
+                .build();
     }
 
     private DailyMenuEntity loadMenu(UUID spaceId, LocalDate date, MealType mealType) {
@@ -223,29 +251,135 @@ public class DailyMenuService {
                         "DailyMenu", "date/mealType", date + "/" + mealType));
     }
 
-    private void saveEntries(UUID spaceId, DailyMenuEntity menu, List<DailyMenuOptionRequest> options) {
+    private void syncEntries(UUID spaceId, DailyMenuEntity menu, List<DailyMenuOptionRequest> options) {
+        List<DailyMenuEntryEntity> existing = dailyMenuEntryRepository.findByDailyMenuId(menu.getId());
+        Set<UUID> pollReferencedIds = mealPollOptionRepository.findReferencedEntryIdsByDailyMenuId(menu.getId());
+        Set<UUID> claimedIds = new HashSet<>();
+        List<DailyMenuEntryEntity> unclaimed = new ArrayList<>(existing);
+
         for (DailyMenuOptionRequest option : options) {
-            MealComboEntity combo = null;
-            FoodItemEntity item = null;
-            DailyMenuEntryType entryType = resolveEntryType(option);
-
-            if (entryType == DailyMenuEntryType.COMBO) {
-                combo = mealComboService.loadCombo(spaceId, option.getComboId());
-                if (!combo.isActive()) {
-                    throw new BusinessException("Combo is not active", HttpStatus.BAD_REQUEST);
-                }
-            } else {
-                item = foodCatalogService.loadEnabledItemForSpace(spaceId, option.getItemId());
+            DailyMenuEntryEntity entry = resolveEntryForOption(menu, option, unclaimed, claimedIds);
+            DailyMenuEntryType entryType = applyScalarsToEntry(spaceId, entry, option);
+            DailyMenuEntryEntity saved = dailyMenuEntryRepository.save(entry);
+            if (entryType == DailyMenuEntryType.PACKAGE) {
+                dailyMenuPackageItemRepository.deleteByEntryId(saved.getId());
+                savePackageItems(spaceId, saved, option.getItemIds());
             }
+            claimedIds.add(saved.getId());
+            UUID savedId = saved.getId();
+            unclaimed.removeIf(e -> e.getId().equals(savedId));
+        }
 
-            dailyMenuEntryRepository.save(DailyMenuEntryEntity.builder()
-                    .dailyMenu(menu)
-                    .entryType(entryType)
-                    .combo(combo)
-                    .item(item)
-                    .label(option.getLabel().trim())
-                    .sortOrder(option.getSortOrder())
-                    .isAvailable(option.isAvailable())
+        for (DailyMenuEntryEntity orphan : unclaimed) {
+            if (pollReferencedIds.contains(orphan.getId())) {
+                orphan.setAvailable(false);
+                dailyMenuEntryRepository.save(orphan);
+            } else {
+                removeEntry(orphan);
+            }
+        }
+    }
+
+    private void removeUnreferencedEntries(UUID dailyMenuId) {
+        Set<UUID> pollReferencedIds = mealPollOptionRepository.findReferencedEntryIdsByDailyMenuId(dailyMenuId);
+        for (DailyMenuEntryEntity entry : dailyMenuEntryRepository.findByDailyMenuId(dailyMenuId)) {
+            if (!pollReferencedIds.contains(entry.getId())) {
+                removeEntry(entry);
+            } else {
+                entry.setAvailable(false);
+                dailyMenuEntryRepository.save(entry);
+            }
+        }
+    }
+
+    private void removeEntry(DailyMenuEntryEntity entry) {
+        dailyMenuPackageItemRepository.deleteByEntryId(entry.getId());
+        dailyMenuEntryRepository.delete(entry);
+    }
+
+    private DailyMenuEntryEntity resolveEntryForOption(
+            DailyMenuEntity menu,
+            DailyMenuOptionRequest option,
+            List<DailyMenuEntryEntity> unclaimed,
+            Set<UUID> claimedIds) {
+        if (option.getOptionId() != null) {
+            return unclaimed.stream()
+                    .filter(entry -> entry.getId().equals(option.getOptionId()))
+                    .findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "DailyMenuEntry", "optionId", option.getOptionId()));
+        }
+
+        DailyMenuEntryType entryType = resolveEntryType(option);
+        return unclaimed.stream()
+                .filter(entry -> !claimedIds.contains(entry.getId()))
+                .filter(entry -> entry.getEntryType() == entryType)
+                .filter(entry -> matchesCatalogRef(entry, option, entryType))
+                .findFirst()
+                .orElseGet(() -> DailyMenuEntryEntity.builder().dailyMenu(menu).build());
+    }
+
+    private boolean matchesCatalogRef(
+            DailyMenuEntryEntity entry, DailyMenuOptionRequest option, DailyMenuEntryType entryType) {
+        return switch (entryType) {
+            case COMBO -> entry.getCombo() != null
+                    && option.getComboId() != null
+                    && entry.getCombo().getId().equals(option.getComboId());
+            case ITEM -> entry.getItem() != null
+                    && option.getItemId() != null
+                    && entry.getItem().getId().equals(option.getItemId());
+            case PACKAGE -> entry.getEntryType() == DailyMenuEntryType.PACKAGE;
+        };
+    }
+
+    private DailyMenuEntryType applyScalarsToEntry(
+            UUID spaceId, DailyMenuEntryEntity entry, DailyMenuOptionRequest option) {
+        MealComboEntity combo = null;
+        FoodItemEntity item = null;
+        DailyMenuEntryType entryType = resolveEntryType(option);
+
+        if (entryType == DailyMenuEntryType.COMBO) {
+            combo = mealComboService.loadCombo(spaceId, option.getComboId());
+            if (!combo.isActive()) {
+                throw new BusinessException("Combo is not active", HttpStatus.BAD_REQUEST);
+            }
+        } else if (entryType == DailyMenuEntryType.ITEM) {
+            item = foodCatalogService.loadEnabledItemForSpace(spaceId, option.getItemId());
+        }
+
+        entry.setEntryType(entryType);
+        entry.setCombo(combo);
+        entry.setItem(item);
+        entry.setLabel(option.getLabel().trim());
+        entry.setSortOrder(option.getSortOrder());
+        entry.setAvailable(option.isAvailable());
+        return entryType;
+    }
+
+    private void savePackageItems(UUID spaceId, DailyMenuEntryEntity entry, List<UUID> itemIds) {
+        if (itemIds == null || itemIds.isEmpty()) {
+            throw new BusinessException("itemIds are required for PACKAGE entries", HttpStatus.BAD_REQUEST);
+        }
+        int sortOrder = 1;
+        for (UUID itemId : itemIds) {
+            FoodItemEntity foodItem = foodCatalogService.loadEnabledItemForSpace(spaceId, itemId);
+            dailyMenuPackageItemRepository.save(DailyMenuPackageItemEntity.builder()
+                    .entry(entry)
+                    .item(foodItem)
+                    .sortOrder(sortOrder++)
+                    .build());
+        }
+    }
+
+    private void copyPackageItems(UUID sourceEntryId, DailyMenuEntryEntity targetEntry) {
+        List<DailyMenuPackageItemEntity> sourceItems =
+                dailyMenuPackageItemRepository.findByEntryIdWithItems(sourceEntryId);
+        int sortOrder = 1;
+        for (DailyMenuPackageItemEntity sourceItem : sourceItems) {
+            dailyMenuPackageItemRepository.save(DailyMenuPackageItemEntity.builder()
+                    .entry(targetEntry)
+                    .item(sourceItem.getItem())
+                    .sortOrder(sortOrder++)
                     .build());
         }
     }
@@ -260,6 +394,16 @@ public class DailyMenuService {
                     throw new BusinessException("itemId must be null for COMBO entries", HttpStatus.BAD_REQUEST);
                 }
                 return DailyMenuEntryType.COMBO;
+            }
+            if (option.getEntryType() == DailyMenuEntryType.PACKAGE) {
+                if (option.getComboId() != null || option.getItemId() != null) {
+                    throw new BusinessException(
+                            "comboId and itemId must be null for PACKAGE entries", HttpStatus.BAD_REQUEST);
+                }
+                if (option.getItemIds() == null || option.getItemIds().isEmpty()) {
+                    throw new BusinessException("itemIds are required for PACKAGE entries", HttpStatus.BAD_REQUEST);
+                }
+                return DailyMenuEntryType.PACKAGE;
             }
             if (option.getItemId() == null) {
                 throw new BusinessException("itemId is required for ITEM entries", HttpStatus.BAD_REQUEST);
@@ -278,7 +422,10 @@ public class DailyMenuService {
         if (option.getItemId() != null) {
             return DailyMenuEntryType.ITEM;
         }
-        throw new BusinessException("entryType or comboId/itemId is required", HttpStatus.BAD_REQUEST);
+        if (option.getItemIds() != null && !option.getItemIds().isEmpty()) {
+            return DailyMenuEntryType.PACKAGE;
+        }
+        throw new BusinessException("entryType or comboId/itemId/itemIds is required", HttpStatus.BAD_REQUEST);
     }
 
     private void validateDateRange(LocalDate from, LocalDate to) {
