@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>गृहप्रवेश निमंत्रण</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Tiro+Devanagari+Marathi:ital@0;1&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #d4c4b0;
+      padding: 24px;
+      font-family: "Noto Sans Devanagari", "Tiro Devanagari Marathi", sans-serif;
+    }
+
+    .invitation {
+      width: 500px;
+      max-width: 100%;
+      background: #faf4e8;
+      box-shadow: 0 16px 48px rgba(60, 30, 50, 0.28);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Parchment texture */
+    .invitation::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='30' cy='30' r='20' fill='none' stroke='%23f0e0c0' stroke-width='0.5' opacity='0.4'/%3E%3C/svg%3E"),
+        radial-gradient(ellipse at 50% 90%, rgba(255, 230, 150, 0.25) 0%, transparent 55%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Side mandala garlands from reference */
+    .side-deco {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 54px;
+      background-image: url("reference-style.png");
+      background-size: 500px auto;
+      background-repeat: repeat-y;
+      z-index: 2;
+      pointer-events: none;
+      opacity: 0.92;
+    }
+    .side-deco.left {
+      left: 0;
+      background-position: 0 80px;
+    }
+    .side-deco.right {
+      right: 0;
+      background-position: -446px 80px;
+    }
+
+    /* ===== HEADER ===== */
+    .header {
+      background: linear-gradient(180deg, #f04d8a 0%, #e8367a 55%, #d92d6e 100%);
+      position: relative;
+      padding: 0 0 32px;
+      text-align: center;
+      z-index: 3;
+    }
+
+    /* Scalloped bottom */
+    .header-scallop {
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 22px;
+      background: #d92d6e;
+      clip-path: polygon(
+        0% 0%, 3.3% 100%, 6.6% 0%, 10% 100%, 13.3% 0%, 16.6% 100%, 20% 0%, 23.3% 100%,
+        26.6% 0%, 30% 100%, 33.3% 0%, 36.6% 100%, 40% 0%, 43.3% 100%, 46.6% 0%, 50% 100%,
+        53.3% 0%, 56.6% 100%, 60% 0%, 63.3% 100%, 66.6% 0%, 70% 100%, 73.3% 0%, 76.6% 100%,
+        80% 0%, 83.3% 100%, 86.6% 0%, 90% 100%, 93.3% 0%, 96.6% 100%, 100% 0%, 100% 100%, 0% 100%
+      );
+    }
+
+    /* Hanging samai from scallops */
+    .hanging-lamps {
+      position: absolute;
+      bottom: -38px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 28px;
+      z-index: 4;
+      pointer-events: none;
+    }
+    .hanging-lamps svg { width: 28px; height: 44px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.2)); }
+
+    .header-inner { padding: 6px 20px 0; position: relative; }
+
+    /* Toran garland */
+    .toran-svg { width: 100%; height: 36px; display: block; margin-bottom: 2px; }
+
+    .header-icons {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 16px;
+      margin: 0 0 6px;
+    }
+
+    .samai-inline { width: 32px; height: auto; }
+
+    /* Ganesha from reference crop via CSS clip */
+    .ganesha-frame {
+      width: 90px;
+      height: 90px;
+      overflow: hidden;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .ganesha-frame img {
+      width: 500px;
+      max-width: none;
+      margin-left: -206px;
+      margin-top: -18px;
+    }
+
+    .header-text {
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.5;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      position: relative;
+      z-index: 1;
+      padding-bottom: 4px;
+    }
+
+    /* ===== BODY ===== */
+    .body {
+      padding: 28px 58px 22px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .kalash { width: 48px; height: auto; flex-shrink: 0; }
+
+    .main-title {
+      font-family: "Tiro Devanagari Marathi", "Noto Sans Devanagari", serif;
+      font-size: 36px;
+      font-weight: 700;
+      color: #4a1a6b;
+      letter-spacing: 0.5px;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .intro {
+      text-align: center;
+      color: #2c1810;
+      font-size: 13.5px;
+      line-height: 1.9;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    /* Floral dividers */
+    .divider {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin: 12px 0;
+    }
+
+    .divider-dots {
+      flex: 1;
+      max-width: 130px;
+      height: 1px;
+      border-top: 1.5px dotted #c9a070;
+    }
+
+    .divider-flower { width: 22px; height: 22px; flex-shrink: 0; margin: 0 4px; }
+
+    /* Section labels */
+    .section-label {
+      text-align: center;
+      color: #a01830;
+      font-size: 15px;
+      font-weight: 700;
+      margin: 4px 0;
+      letter-spacing: 0.3px;
+    }
+
+    .pill-wrap { text-align: center; margin: 6px 0 8px; }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      background: linear-gradient(180deg, #7b3fa0 0%, #5c2d82 100%);
+      color: #fff;
+      padding: 5px 22px;
+      border-radius: 22px;
+      font-size: 13.5px;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(92, 45, 130, 0.35);
+      letter-spacing: 0.2px;
+    }
+
+    .detail-text {
+      text-align: center;
+      color: #2c1810;
+      font-size: 13.5px;
+      line-height: 1.9;
+      font-weight: 500;
+    }
+
+    .venue-text {
+      color: #1a4a7a;
+      font-weight: 600;
+    }
+
+    /* Footer floral divider */
+    .footer-divider {
+      margin: 14px auto 10px;
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      justify-content: center;
+    }
+    .footer-divider svg { width: 100%; height: 32px; }
+
+    .inviters-grid {
+      display: grid;
+      grid-template-columns: 1fr 1px 1fr;
+      gap: 0 10px;
+      align-items: start;
+      margin-top: 8px;
+    }
+
+    .inviters-grid .vline {
+      background: #bbb;
+      width: 1px;
+      min-height: 58px;
+      justify-self: center;
+    }
+
+    .inviter-col { display: flex; flex-direction: column; gap: 7px; }
+
+    .inviter {
+      display: flex;
+      align-items: flex-start;
+      gap: 5px;
+      font-size: 12.5px;
+      color: #2c1810;
+      line-height: 1.45;
+      font-weight: 500;
+    }
+
+    .inviter .dot {
+      color: #c0392b;
+      font-size: 9px;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+
+    .bottom-border {
+      margin-top: 16px;
+      display: flex;
+      justify-content: center;
+    }
+    .bottom-border svg { width: 88%; height: 14px; }
+
+    @media print {
+      body { background: white; padding: 0; }
+      .invitation { box-shadow: none; width: 500px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="invitation">
+    <div class="side-deco left"></div>
+    <div class="side-deco right"></div>
+
+    <header class="header">
+      <div class="header-inner">
+        <!-- Marigold toran -->
+        <svg class="toran-svg" viewBox="0 0 500 36" xmlns="http://www.w3.org/2000/svg">
+          <path d="M0 20 Q30 8 60 18 Q90 28 120 14 Q150 4 180 16 Q210 28 240 12 Q270 4 300 16 Q330 28 360 14 Q390 4 420 16 Q450 28 480 12 Q490 8 500 14" fill="none" stroke="#2d8a00" stroke-width="1.5"/>
+          <circle cx="20" cy="16" r="7" fill="#ff8c00"/><circle cx="20" cy="16" r="4" fill="#ffd700"/>
+          <circle cx="45" cy="12" r="6" fill="#ffd700"/><circle cx="70" cy="18" r="7" fill="#ff8c00"/>
+          <circle cx="95" cy="10" r="6" fill="#ffd700"/><circle cx="120" cy="16" r="7" fill="#ff8c00"/>
+          <circle cx="145" cy="12" r="6" fill="#ffd700"/><circle cx="170" cy="18" r="7" fill="#ff8c00"/>
+          <circle cx="195" cy="10" r="6" fill="#ffd700"/><circle cx="220" cy="16" r="7" fill="#ff8c00"/>
+          <circle cx="245" cy="12" r="6" fill="#ffd700"/><circle cx="270" cy="18" r="7" fill="#ff8c00"/>
+          <circle cx="295" cy="10" r="6" fill="#ffd700"/><circle cx="320" cy="16" r="7" fill="#ff8c00"/>
+          <circle cx="345" cy="12" r="6" fill="#ffd700"/><circle cx="370" cy="18" r="7" fill="#ff8c00"/>
+          <circle cx="395" cy="10" r="6" fill="#ffd700"/><circle cx="420" cy="16" r="7" fill="#ff8c00"/>
+          <circle cx="445" cy="12" r="6" fill="#ffd700"/><circle cx="470" cy="18" r="7" fill="#ff8c00"/>
+        </svg>
+
+        <div class="header-icons">
+          <svg class="samai-inline" viewBox="0 0 32 50" xmlns="http://www.w3.org/2000/svg">
+            <line x1="16" y1="0" x2="16" y2="8" stroke="#ffd700" stroke-width="1.2"/>
+            <ellipse cx="16" cy="12" rx="9" ry="3.5" fill="#ffd700"/>
+            <path d="M7 12 Q16 24 25 12" fill="#ffb700" stroke="#daa520" stroke-width="0.4"/>
+            <rect x="12" y="20" width="8" height="14" rx="1.5" fill="#c8860a"/>
+            <ellipse cx="16" cy="38" rx="11" ry="3.5" fill="#daa520"/>
+            <ellipse cx="16" cy="10" rx="5" ry="2" fill="#fff8dc" opacity="0.6"/>
+          </svg>
+
+          <div class="ganesha-frame">
+            <img src="reference-style.png" alt="श्री गणेश" />
+          </div>
+
+          <svg class="samai-inline" viewBox="0 0 32 50" xmlns="http://www.w3.org/2000/svg">
+            <line x1="16" y1="0" x2="16" y2="8" stroke="#ffd700" stroke-width="1.2"/>
+            <ellipse cx="16" cy="12" rx="9" ry="3.5" fill="#ffd700"/>
+            <path d="M7 12 Q16 24 25 12" fill="#ffb700" stroke="#daa520" stroke-width="0.4"/>
+            <rect x="12" y="20" width="8" height="14" rx="1.5" fill="#c8860a"/>
+            <ellipse cx="16" cy="38" rx="11" ry="3.5" fill="#daa520"/>
+            <ellipse cx="16" cy="10" rx="5" ry="2" fill="#fff8dc" opacity="0.6"/>
+          </svg>
+        </div>
+
+        <p class="header-text">|| श्री गणेशाय नमः ||</p>
+      </div>
+      <div class="header-scallop"></div>
+
+      <div class="hanging-lamps">
+        <svg viewBox="0 0 28 44"><line x1="14" y1="0" x2="14" y2="6" stroke="#daa520" stroke-width="1"/><ellipse cx="14" cy="10" rx="7" ry="2.5" fill="#ffd700"/><rect x="10" y="12" width="8" height="10" rx="1" fill="#c8860a"/><ellipse cx="14" cy="24" rx="9" ry="2.5" fill="#daa520"/></svg>
+        <svg viewBox="0 0 28 44"><line x1="14" y1="0" x2="14" y2="6" stroke="#daa520" stroke-width="1"/><ellipse cx="14" cy="10" rx="7" ry="2.5" fill="#ffd700"/><rect x="10" y="12" width="8" height="10" rx="1" fill="#c8860a"/><ellipse cx="14" cy="24" rx="9" ry="2.5" fill="#daa520"/></svg>
+        <svg viewBox="0 0 28 44"><line x1="14" y1="0" x2="14" y2="6" stroke="#daa520" stroke-width="1"/><ellipse cx="14" cy="10" rx="7" ry="2.5" fill="#ffd700"/><rect x="10" y="12" width="8" height="10" rx="1" fill="#c8860a"/><ellipse cx="14" cy="24" rx="9" ry="2.5" fill="#daa520"/></svg>
+        <svg viewBox="0 0 28 44"><line x1="14" y1="0" x2="14" y2="6" stroke="#daa520" stroke-width="1"/><ellipse cx="14" cy="10" rx="7" ry="2.5" fill="#ffd700"/><rect x="10" y="12" width="8" height="10" rx="1" fill="#c8860a"/><ellipse cx="14" cy="24" rx="9" ry="2.5" fill="#daa520"/></svg>
+      </div>
+    </header>
+
+    <main class="body">
+      <div class="title-row">
+        <svg class="kalash" viewBox="0 0 48 64" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="24" cy="56" rx="17" ry="5" fill="#a0622a"/>
+          <path d="M9 56 L9 32 Q9 20 24 17 Q39 20 39 32 L39 56" fill="#cd7f32" stroke="#7a4a1a" stroke-width="0.6"/>
+          <ellipse cx="24" cy="32" rx="13" ry="3" fill="#daa520"/>
+          <ellipse cx="24" cy="15" rx="9" ry="11" fill="#6b4226"/>
+          <path d="M15 9 Q24 1 33 9" fill="#2d5016"/>
+          <path d="M17 7 Q24 0 31 7" fill="#3d7020"/>
+          <path d="M19 5 Q24 -1 29 5" fill="#4a8828"/>
+          <text x="24" y="42" text-anchor="middle" font-size="11" fill="#c0392b">卍</text>
+        </svg>
+
+        <h1 class="main-title">॥ गृहप्रवेश ॥</h1>
+
+        <svg class="kalash" viewBox="0 0 48 64" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="24" cy="56" rx="17" ry="5" fill="#a0622a"/>
+          <path d="M9 56 L9 32 Q9 20 24 17 Q39 20 39 32 L39 56" fill="#cd7f32" stroke="#7a4a1a" stroke-width="0.6"/>
+          <ellipse cx="24" cy="32" rx="13" ry="3" fill="#daa520"/>
+          <ellipse cx="24" cy="15" rx="9" ry="11" fill="#6b4226"/>
+          <path d="M15 9 Q24 1 33 9" fill="#2d5016"/>
+          <path d="M17 7 Q24 0 31 7" fill="#3d7020"/>
+          <path d="M19 5 Q24 -1 29 5" fill="#4a8828"/>
+          <text x="24" y="42" text-anchor="middle" font-size="11" fill="#c0392b">卍</text>
+        </svg>
+      </div>
+
+      <p class="intro">
+        आपणास कळविण्यात आनंद होत आहे की,<br />
+        आमच्या नवीन घराच्या गृहप्रवेश निमित्त आयोजित कार्यक्रमास<br />
+        आपण सहकुटुंब व मित्रपरिवारासह उपस्थित राहून<br />
+        आपले शुभ आशीर्वाद द्यावेत ही नम्र विनंती.
+      </p>
+
+      <div class="divider">
+        <span class="divider-dots"></span>
+        <svg class="divider-flower" viewBox="0 0 22 22"><circle cx="11" cy="11" r="5" fill="#e8437a"/><circle cx="11" cy="4" r="3" fill="#e8437a"/><circle cx="11" cy="18" r="3" fill="#e8437a"/><circle cx="4" cy="11" r="3" fill="#e8437a"/><circle cx="18" cy="11" r="3" fill="#e8437a"/><circle cx="11" cy="11" r="2" fill="#ffd700"/></svg>
+        <span class="divider-dots"></span>
+      </div>
+
+      <p class="section-label">❖ कार्यक्रम ❖</p>
+
+      <div class="divider">
+        <span class="divider-dots"></span>
+        <svg class="divider-flower" viewBox="0 0 22 22"><circle cx="11" cy="11" r="5" fill="#e8437a"/><circle cx="11" cy="4" r="3" fill="#e8437a"/><circle cx="11" cy="18" r="3" fill="#e8437a"/><circle cx="4" cy="11" r="3" fill="#e8437a"/><circle cx="18" cy="11" r="3" fill="#e8437a"/><circle cx="11" cy="11" r="2" fill="#ffd700"/></svg>
+        <span class="divider-dots"></span>
+      </div>
+
+      <div class="pill-wrap">
+        <span class="pill">❖ भोजन ❖</span>
+      </div>
+      <p class="detail-text">
+        रविवार, दि. २८ जून २०२६<br />
+        सकाळी ११.०० ते दुपारी २.०० वा.
+      </p>
+
+      <div class="divider">
+        <span class="divider-dots"></span>
+        <svg class="divider-flower" viewBox="0 0 22 22"><circle cx="11" cy="11" r="5" fill="#e8437a"/><circle cx="11" cy="4" r="3" fill="#e8437a"/><circle cx="11" cy="18" r="3" fill="#e8437a"/><circle cx="4" cy="11" r="3" fill="#e8437a"/><circle cx="18" cy="11" r="3" fill="#e8437a"/><circle cx="11" cy="11" r="2" fill="#ffd700"/></svg>
+        <span class="divider-dots"></span>
+      </div>
+
+      <div class="pill-wrap">
+        <span class="pill">❖ स्थळ ❖</span>
+      </div>
+      <p class="detail-text venue-text">
+        ७८/२, प्लॉट नं. ३२,<br />
+        बालासो इंगवले पार्क,<br />
+        जुन्या हॉटेल कोल्हापूर डायनिंगच्या मागे,<br />
+        फुलेवाडी टोल नाका,<br />
+        सर्वेश पार्क जवळ,<br />
+        कोल्हापूर – ४१६०१०
+      </p>
+
+      <div class="footer-divider">
+        <svg viewBox="0 0 360 32" xmlns="http://www.w3.org/2000/svg">
+          <line x1="0" y1="16" x2="110" y2="16" stroke="#c9a882" stroke-width="1"/>
+          <circle cx="118" cy="16" r="5" fill="#e8437a"/><circle cx="118" cy="10" r="3.5" fill="#e8437a"/><circle cx="118" cy="22" r="3.5" fill="#e8437a"/>
+          <circle cx="128" cy="16" r="4" fill="#2d8a4e"/><circle cx="136" cy="16" r="5" fill="#e8437a"/>
+          <circle cx="144" cy="16" r="4" fill="#2d8a4e"/><circle cx="152" cy="16" r="5" fill="#e8437a"/>
+          <circle cx="162" cy="16" r="7" fill="#e8437a"/><circle cx="162" cy="7" r="4.5" fill="#e8437a"/><circle cx="162" cy="25" r="4.5" fill="#e8437a"/>
+          <circle cx="162" cy="16" r="3" fill="#ffd700"/>
+          <circle cx="172" cy="16" r="5" fill="#e8437a"/><circle cx="180" cy="16" r="4" fill="#2d8a4e"/>
+          <circle cx="188" cy="16" r="5" fill="#e8437a"/><circle cx="196" cy="16" r="4" fill="#2d8a4e"/>
+          <circle cx="204" cy="16" r="5" fill="#e8437a"/><circle cx="212" cy="16" r="3.5" fill="#e8437a"/>
+          <line x1="220" y1="16" x2="360" y2="16" stroke="#c9a882" stroke-width="1"/>
+        </svg>
+      </div>
+
+      <p class="section-label">❖ निमंत्रक ❖</p>
+
+      <div class="inviters-grid">
+        <div class="inviter-col">
+          <div class="inviter"><span class="dot">✿</span><span>सौ. राधिका शामराव कुंभार</span></div>
+          <div class="inviter"><span class="dot">✿</span><span>सौ. अमृता विनय कुंभार</span></div>
+        </div>
+        <div class="vline"></div>
+        <div class="inviter-col">
+          <div class="inviter"><span class="dot">✿</span><span>श्री. शामराव बाबुराव कुंभार</span></div>
+          <div class="inviter"><span class="dot">✿</span><span>श्री. विनय शामराव कुंभार</span></div>
+        </div>
+      </div>
+
+      <div class="bottom-border">
+        <svg viewBox="0 0 400 14" xmlns="http://www.w3.org/2000/svg">
+          <path d="M0 7 Q15 3 30 7 Q45 11 60 7" fill="none" stroke="#2d8a4e" stroke-width="1.5"/>
+          <line x1="60" y1="7" x2="340" y2="7" stroke="#2d8a4e" stroke-width="1.5"/>
+          <path d="M340 7 Q355 11 370 7 Q385 3 400 7" fill="none" stroke="#2d8a4e" stroke-width="1.5"/>
+          <circle cx="30" cy="7" r="2" fill="#e8437a"/><circle cx="370" cy="7" r="2" fill="#e8437a"/>
+        </svg>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

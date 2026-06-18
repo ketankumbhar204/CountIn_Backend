@@ -2,6 +2,7 @@ package com.countin.countin_backend.member.application.service;
 
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.common.util.MobileNumberNormalizer;
 import com.countin.countin_backend.meal.application.service.MealParticipationService;
 import com.countin.countin_backend.member.api.dto.request.CreateMemberDocumentRequest;
 import com.countin.countin_backend.member.api.dto.request.CreateMemberNoteRequest;
@@ -60,6 +61,7 @@ public class MemberMasterService {
     private final SpaceMembershipRepository spaceMembershipRepository;
     private final OccupancyService occupancyService;
     private final MealParticipationService mealParticipationService;
+    private final InvitationProvisioner invitationProvisioner;
 
     @Transactional
     public MemberResponse createMember(UUID spaceId, UUID callerId, CreateMemberRequest request) {
@@ -70,30 +72,29 @@ public class MemberMasterService {
         assertOwnerOrManager(spaceId, callerId);
         assertRoleAllowedForMemberApi(request.getRole());
 
-        if (memberRepository.existsBySpaceIdAndMobileNumberAndIsActiveTrue(
-                spaceId, request.getMobileNumber())) {
-            throw new BusinessException(
-                    "An active member with this mobile number already exists in the space");
-        }
+        String mobileNumber = MobileNumberNormalizer.normalize(request.getMobileNumber());
+        assertMobileAllowedForMemberRecord(spaceId, mobileNumber, null);
 
-        Optional<UserEntity> existingUser =
-                userRepository.findByMobileNumber(request.getMobileNumber());
-        Optional<SpaceMembershipEntity> existingMembership = existingUser
-                .flatMap(user -> spaceMembershipRepository.findMembership(user.getId(), spaceId));
+        Optional<UserEntity> existingUser = userRepository.findByMobileNumber(mobileNumber);
+
+        UserEntity invitedBy = userRepository
+                .findByIdAndIsActiveTrue(callerId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", callerId));
 
         LocalDateTime now = LocalDateTime.now();
         MemberEntity member = MemberEntity.builder()
                 .space(space)
                 .user(existingUser.orElse(null))
-                .membership(existingMembership.orElse(null))
+                .membership(null)
                 .fullName(request.getFullName())
-                .mobileNumber(request.getMobileNumber())
+                .mobileNumber(mobileNumber)
                 .role(request.getRole())
                 .status(MemberStatus.ACTIVE)
                 .statusUpdatedAt(now)
                 .build();
 
         member = memberRepository.save(member);
+        invitationProvisioner.ensurePendingInvitation(space, invitedBy, mobileNumber, request.getRole());
         return MemberResponse.from(member);
     }
 
@@ -177,24 +178,25 @@ public class MemberMasterService {
             throw new BusinessException("OWNER role cannot be modified");
         }
 
-        if (!member.getMobileNumber().equals(request.getMobileNumber())
-                && memberRepository.existsBySpaceIdAndMobileNumberAndIsActiveTrue(
-                        spaceId, request.getMobileNumber())) {
-            throw new BusinessException(
-                    "An active member with this mobile number already exists in the space");
-        }
+        String mobileNumber = MobileNumberNormalizer.normalize(request.getMobileNumber());
+        assertMobileAllowedForMemberRecord(spaceId, mobileNumber, memberId);
 
-        Optional<UserEntity> existingUser =
-                userRepository.findByMobileNumber(request.getMobileNumber());
+        Optional<UserEntity> existingUser = userRepository.findByMobileNumber(mobileNumber);
         member.setFullName(request.getFullName());
-        member.setMobileNumber(request.getMobileNumber());
+        member.setMobileNumber(mobileNumber);
         member.setRole(request.getRole());
         member.setUser(existingUser.orElse(null));
 
         if (existingUser.isPresent()) {
-            spaceMembershipRepository
-                    .findMembership(existingUser.get().getId(), spaceId)
-                    .ifPresent(member::setMembership);
+            Optional<SpaceMembershipEntity> membership = spaceMembershipRepository.findMembership(
+                    existingUser.get().getId(), spaceId);
+            if (member.getMembership() != null
+                    && membership.isPresent()
+                    && member.getMembership().getId().equals(membership.get().getId())) {
+                member.setMembership(membership.get());
+            } else {
+                member.setMembership(null);
+            }
         } else {
             member.setMembership(null);
         }
@@ -569,6 +571,47 @@ public class MemberMasterService {
             throw new BusinessException(
                     "Only OWNER or MANAGER can perform this action", HttpStatus.FORBIDDEN);
         }
+    }
+
+    private void assertMobileAllowedForMemberRecord(
+            UUID spaceId, String mobileNumber, UUID updatingMemberId) {
+        Optional<MemberEntity> memberWithMobile =
+                memberRepository.findActiveBySpaceIdAndMobileNumber(spaceId, mobileNumber);
+
+        if (memberWithMobile.isPresent()
+                && (updatingMemberId == null
+                        || !memberWithMobile.get().getId().equals(updatingMemberId))) {
+            throw new BusinessException(
+                    "A member with this mobile number already exists in this space.",
+                    HttpStatus.CONFLICT);
+        }
+
+        Optional<UserEntity> existingUser = userRepository.findByMobileNumber(mobileNumber);
+        if (existingUser.isEmpty()) {
+            return;
+        }
+
+        UUID userId = existingUser.get().getId();
+        if (!spaceMembershipRepository.existsByUserIdAndSpaceIdAndStatus(
+                userId, spaceId, MembershipStatus.ACTIVE)) {
+            return;
+        }
+
+        if (updatingMemberId != null) {
+            MemberEntity updating = memberRepository
+                    .findByIdAndSpaceIdAndActiveTrue(updatingMemberId, spaceId)
+                    .orElse(null);
+            if (updating != null
+                    && updating.getUser() != null
+                    && updating.getUser().getId().equals(userId)
+                    && updating.getMembership() != null) {
+                return;
+            }
+        }
+
+        throw new BusinessException(
+                "An account with this mobile number already exists in this space.",
+                HttpStatus.CONFLICT);
     }
 
     private MemberDetailsResponse toMemberDetails(MemberEntity member) {

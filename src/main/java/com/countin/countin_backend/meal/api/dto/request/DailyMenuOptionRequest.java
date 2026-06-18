@@ -2,6 +2,7 @@ package com.countin.countin_backend.meal.api.dto.request;
 
 import com.countin.countin_backend.meal.domain.model.DailyMenuEntryType;
 import jakarta.validation.constraints.NotBlank;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import lombok.Getter;
@@ -25,6 +26,10 @@ public class DailyMenuOptionRequest {
 
     @NotBlank
     private String label;
+
+    private BigDecimal price;
+
+    private String currencyCode;
 
     private int sortOrder;
     private boolean isAvailable = true;

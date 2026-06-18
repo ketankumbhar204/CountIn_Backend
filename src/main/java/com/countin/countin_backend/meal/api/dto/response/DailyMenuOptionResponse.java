@@ -4,6 +4,7 @@ import com.countin.countin_backend.meal.domain.model.DailyMenuEntryType;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntryEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuPackageItemEntity;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -20,6 +21,8 @@ public class DailyMenuOptionResponse {
     private UUID itemId;
     private String label;
     private int sortOrder;
+    private BigDecimal price;
+    private String currencyCode;
     private List<DailyMenuPackageItemResponse> packageItems;
 
     @JsonProperty("isAvailable")
@@ -44,8 +47,28 @@ public class DailyMenuOptionResponse {
                 .itemId(entity.getItem() != null ? entity.getItem().getId() : null)
                 .label(entity.getLabel())
                 .sortOrder(entity.getSortOrder())
+                .price(resolvePrice(entity))
+                .currencyCode(resolveCurrencyCode(entity))
                 .available(entity.isAvailable())
                 .packageItems(items.isEmpty() ? null : items)
                 .build();
+    }
+
+    private static BigDecimal resolvePrice(DailyMenuEntryEntity entity) {
+        if (entity.getEntryType() == DailyMenuEntryType.COMBO
+                && entity.getCombo() != null
+                && entity.getCombo().getPrice() != null) {
+            return entity.getCombo().getPrice();
+        }
+        return entity.getPrice();
+    }
+
+    private static String resolveCurrencyCode(DailyMenuEntryEntity entity) {
+        if (entity.getEntryType() == DailyMenuEntryType.COMBO
+                && entity.getCombo() != null
+                && entity.getCombo().getPrice() != null) {
+            return entity.getCombo().getCurrencyCode();
+        }
+        return entity.getCurrencyCode();
     }
 }

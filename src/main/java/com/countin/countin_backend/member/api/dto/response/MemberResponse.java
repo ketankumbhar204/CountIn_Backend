@@ -33,6 +33,9 @@ public class MemberResponse {
 
     private LocalDateTime createdAt;
 
+    @Schema(description = "Active space membership when the member has CountIn access in this space")
+    private UUID membershipId;
+
     public static MemberResponse from(MemberEntity member) {
         return MemberResponse.builder()
                 .memberId(member.getId())
@@ -40,6 +43,7 @@ public class MemberResponse {
                 .mobileNumber(member.getMobileNumber())
                 .role(member.getRole())
                 .linkedUser(member.getUser() != null)
+                .membershipId(member.getMembership() != null ? member.getMembership().getId() : null)
                 .status(member.getStatus())
                 .occupancyStatus(member.getOccupancyStatus())
                 .createdAt(member.getCreatedAt())

@@ -2,18 +2,20 @@ package com.countin.countin_backend.member.application.service;
 
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.common.util.MobileNumberNormalizer;
 import com.countin.countin_backend.member.api.dto.request.CreateInvitationRequest;
 import com.countin.countin_backend.member.api.dto.response.InvitationResponse;
 import com.countin.countin_backend.member.api.dto.response.MyInvitationResponse;
 import com.countin.countin_backend.member.api.dto.response.SpaceMembershipResponse;
 import com.countin.countin_backend.member.domain.model.InvitationStatus;
-import com.countin.countin_backend.member.application.service.MemberMasterService;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.domain.model.MembershipStatus;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.InvitationEntity;
+import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.InvitationRepository;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.SpaceMembershipRepository;
+import com.countin.countin_backend.meal.application.service.MealParticipationService;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
 import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
@@ -30,13 +32,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class InvitationService {
 
-    private static final int INVITATION_EXPIRY_DAYS = 7;
-
     private final InvitationRepository invitationRepository;
     private final SpaceMembershipRepository spaceMembershipRepository;
     private final SpaceRepository spaceRepository;
     private final UserRepository userRepository;
     private final MemberMasterService memberMasterService;
+    private final InvitationProvisioner invitationProvisioner;
+    private final MealParticipationService mealParticipationService;
 
     @Transactional
     public InvitationResponse createInvitation(CreateInvitationRequest request) {
@@ -56,24 +58,18 @@ public class InvitationService {
                     "Only OWNER or MANAGER can send invitations", HttpStatus.FORBIDDEN);
         }
 
-        boolean pendingExists = invitationRepository.existsBySpaceIdAndMobileNumberAndStatus(
-                space.getId(), request.getMobileNumber(), InvitationStatus.PENDING);
-
-        if (pendingExists) {
+        String normalizedMobile = MobileNumberNormalizer.normalize(request.getMobileNumber());
+        if (invitationRepository.existsBySpaceIdAndMobileNumberAndStatus(
+                space.getId(), normalizedMobile, InvitationStatus.PENDING)) {
             throw new BusinessException(
                     "A pending invitation already exists for this mobile number in the space");
         }
 
-        InvitationEntity invitation = InvitationEntity.builder()
-                .space(space)
-                .invitedBy(invitedBy)
-                .mobileNumber(request.getMobileNumber())
-                .role(request.getRole())
-                .status(InvitationStatus.PENDING)
-                .expiresAt(LocalDateTime.now().plusDays(INVITATION_EXPIRY_DAYS))
-                .build();
+        InvitationEntity invitation = invitationProvisioner
+                .ensurePendingInvitation(space, invitedBy, normalizedMobile, request.getRole())
+                .orElseThrow(() -> new BusinessException(
+                        "User already has an active membership in this space", HttpStatus.CONFLICT));
 
-        invitation = invitationRepository.save(invitation);
         return InvitationResponse.from(invitation);
     }
 
@@ -138,8 +134,9 @@ public class InvitationService {
         invitation.setAcceptedAt(LocalDateTime.now());
         invitationRepository.save(invitation);
 
-        memberMasterService.linkMemberToMembership(
+        MemberEntity member = memberMasterService.linkMemberToMembership(
                 membership, user.getFullName(), user.getMobileNumber());
+        mealParticipationService.enrollDefaultForMemberIfEligible(member, user);
 
         return SpaceMembershipResponse.from(membership);
     }

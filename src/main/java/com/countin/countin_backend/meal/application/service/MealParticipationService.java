@@ -19,8 +19,10 @@ import com.countin.countin_backend.meal.infrastructure.persistence.repository.Me
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealParticipationRepository;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
+import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
 import com.countin.countin_backend.occupancy.infrastructure.persistence.entity.OccupancyEntity;
+import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
 import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
@@ -188,6 +190,50 @@ public class MealParticipationService {
                     applyStatusChange(participation, MealParticipationStatus.STOPPED, actor);
                     participationRepository.save(participation);
                 });
+    }
+
+    /**
+     * Enables default meal access when a member joins via invitation (Mess customer / PG tenant).
+     */
+    @Transactional
+    public void enrollDefaultForMemberIfEligible(MemberEntity member, UserEntity actor) {
+        if (!isDefaultMealEligible(member)) {
+            return;
+        }
+
+        UUID spaceId = member.getSpace().getId();
+        UUID memberId = member.getId();
+
+        if (participationRepository.existsBySpaceIdAndMemberIdAndStatus(
+                spaceId, memberId, MealParticipationStatus.ACTIVE)) {
+            return;
+        }
+
+        Optional<MealParticipationEntity> paused = participationRepository.findBySpaceIdAndMemberIdAndStatus(
+                spaceId, memberId, MealParticipationStatus.PAUSED);
+        if (paused.isPresent()) {
+            applyStatusChange(paused.get(), MealParticipationStatus.ACTIVE, actor);
+            participationRepository.save(paused.get());
+            return;
+        }
+
+        MealPlanEntity fullPlan = mealPlanService.ensurePresetPlans(spaceId);
+        MealParticipationEntity participation = MealParticipationEntity.builder()
+                .space(member.getSpace())
+                .member(member)
+                .mealPlan(fullPlan)
+                .status(MealParticipationStatus.ACTIVE)
+                .effectiveFrom(LocalDate.now())
+                .build();
+        participation = participationRepository.save(participation);
+        recordHistory(participation, MealParticipationHistoryAction.CREATED, null, MealPlanCode.FULL.name(), actor);
+    }
+
+    private static boolean isDefaultMealEligible(MemberEntity member) {
+        SpaceType spaceType = member.getSpace().getType();
+        MembershipRole role = member.getRole();
+        return (spaceType == SpaceType.MESS && role == MembershipRole.CUSTOMER)
+                || (spaceType == SpaceType.PG && role == MembershipRole.TENANT);
     }
 
     private MealParticipationResponse changeStatus(

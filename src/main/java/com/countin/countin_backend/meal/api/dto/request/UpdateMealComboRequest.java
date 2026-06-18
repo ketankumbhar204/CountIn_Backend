@@ -2,6 +2,7 @@ package com.countin.countin_backend.meal.api.dto.request;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -16,6 +17,10 @@ public class UpdateMealComboRequest {
     private String name;
 
     private String description;
+
+    private BigDecimal price;
+
+    private String currencyCode;
 
     private Boolean active;
 

@@ -19,6 +19,8 @@ import com.countin.countin_backend.meal.infrastructure.persistence.repository.Me
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealParticipationRepository;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -122,20 +124,27 @@ public class MealSharePreviewService {
 
     private MealSharePreviewLineResponse toLine(DailyMenuEntryEntity entry) {
         String detail = null;
+        BigDecimal price = null;
+        String currencyCode = entry.getCurrencyCode();
         if (entry.getEntryType() == DailyMenuEntryType.COMBO && entry.getCombo() != null) {
             detail = mealComboItemRepository.findByComboIdWithItems(entry.getCombo().getId()).stream()
                     .map(MealComboItemEntity::getItem)
                     .map(item -> item.getName())
                     .collect(Collectors.joining(" · "));
+            price = entry.getCombo().getPrice();
+            currencyCode = entry.getCombo().getCurrencyCode();
         } else if (entry.getEntryType() == DailyMenuEntryType.PACKAGE) {
             detail = dailyMenuPackageItemRepository.findByEntryIdWithItems(entry.getId()).stream()
                     .map(pi -> pi.getItem().getName())
                     .collect(Collectors.joining(" · "));
+            price = entry.getPrice();
         }
         return MealSharePreviewLineResponse.builder()
                 .entryType(entry.getEntryType())
                 .label(entry.getLabel())
                 .detail(detail != null && !detail.isBlank() ? detail : null)
+                .price(price)
+                .currencyCode(currencyCode)
                 .build();
     }
 
@@ -198,7 +207,7 @@ public class MealSharePreviewService {
     private void appendNumberedSlotOptions(StringBuilder message, MealSharePreviewSlotResponse slot) {
         int optionNum = 1;
         for (MealSharePreviewLineResponse line : slot.getLines()) {
-            message.append(optionNum).append(". ").append(line.getLabel()).append('\n');
+            message.append(optionNum).append(". ").append(formatOptionLabel(line)).append('\n');
             if (line.getDetail() != null && !line.getDetail().isBlank()) {
                 message.append(formatDetailForShare(line.getDetail())).append('\n');
             }
@@ -208,6 +217,22 @@ public class MealSharePreviewService {
                 .append(". Not available for ")
                 .append(formatMealType(slot.getMealType()))
                 .append('\n');
+    }
+
+    private String formatOptionLabel(MealSharePreviewLineResponse line) {
+        if (line.getPrice() == null) {
+            return line.getLabel();
+        }
+        return line.getLabel() + " - " + formatPrice(line.getPrice(), line.getCurrencyCode());
+    }
+
+    private String formatPrice(BigDecimal price, String currencyCode) {
+        String code = currencyCode != null ? currencyCode : "INR";
+        String amount = price.setScale(2, RoundingMode.HALF_UP).stripTrailingZeros().toPlainString();
+        if ("INR".equalsIgnoreCase(code)) {
+            return "₹" + amount;
+        }
+        return code + " " + amount;
     }
 
     private String formatDetailForShare(String detail) {

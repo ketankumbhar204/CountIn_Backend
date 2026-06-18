@@ -205,6 +205,8 @@ public class DailyMenuService {
                     .label(sourceEntry.getLabel())
                     .sortOrder(sourceEntry.getSortOrder())
                     .isAvailable(sourceEntry.isAvailable())
+                    .price(sourceEntry.getPrice())
+                    .currencyCode(sourceEntry.getCurrencyCode())
                     .build());
             if (sourceEntry.getEntryType() == DailyMenuEntryType.PACKAGE) {
                 copyPackageItems(sourceEntry.getId(), copied);
@@ -353,6 +355,14 @@ public class DailyMenuService {
         entry.setLabel(option.getLabel().trim());
         entry.setSortOrder(option.getSortOrder());
         entry.setAvailable(option.isAvailable());
+        if (entryType == DailyMenuEntryType.PACKAGE) {
+            MealPriceValidator.validateOptionalPrice(option.getPrice());
+            entry.setPrice(option.getPrice());
+            entry.setCurrencyCode(MealPriceValidator.resolveCurrencyCode(option.getCurrencyCode()));
+        } else {
+            entry.setPrice(null);
+            entry.setCurrencyCode("INR");
+        }
         return entryType;
     }
 

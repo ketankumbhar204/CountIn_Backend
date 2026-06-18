@@ -4,12 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.meal.api.dto.request.CreateComboInlineItemRequest;
 import com.countin.countin_backend.meal.api.dto.request.CreateMealComboRequest;
+import com.countin.countin_backend.meal.api.dto.request.UpdateMealComboRequest;
 import com.countin.countin_backend.meal.domain.model.FoodScope;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.FoodItemEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboEntity;
@@ -114,6 +116,39 @@ class MealComboServiceTest {
                 itemRequest -> itemRequest.getCategoryId().equals(categoryId)
                         && itemRequest.getName().equals("Mess Special Dal")));
         verify(mealComboItemRepository).save(any(MealComboItemEntity.class));
+    }
+
+    @Test
+    void updateCombo_replacesItemsAfterDelete() {
+        stubOwnerMembership();
+        SpaceEntity space = space();
+        UUID comboId = UUID.randomUUID();
+        UUID rotiId = UUID.fromString("22222222-2222-2222-2222-222222220002");
+        UUID dalId = UUID.fromString("22222222-2222-2222-2222-222222220071");
+        MealComboEntity combo = MealComboEntity.builder()
+                .space(space)
+                .name("Cmobo 1")
+                .isActive(true)
+                .build();
+        combo.setId(comboId);
+        when(mealComboRepository.findByIdAndSpaceId(comboId, spaceId)).thenReturn(Optional.of(combo));
+        when(mealComboRepository.save(combo)).thenReturn(combo);
+        when(foodCatalogService.loadEnabledItemForSpace(spaceId, rotiId))
+                .thenReturn(FoodItemEntity.builder().name("Roti").build());
+        when(foodCatalogService.loadEnabledItemForSpace(spaceId, dalId))
+                .thenReturn(FoodItemEntity.builder().name("Plain Daal").build());
+        when(mealComboItemRepository.findByComboIdWithItems(comboId)).thenReturn(List.of());
+
+        UpdateMealComboRequest request = new UpdateMealComboRequest();
+        request.setName("Cmobo 1");
+        request.setItemIds(List.of(rotiId, dalId));
+
+        mealComboService.updateCombo(spaceId, comboId, callerId, request);
+
+        var order = inOrder(mealComboRepository, mealComboItemRepository);
+        order.verify(mealComboRepository).save(combo);
+        order.verify(mealComboItemRepository).deleteByComboId(comboId);
+        verify(mealComboItemRepository, org.mockito.Mockito.times(2)).save(any(MealComboItemEntity.class));
     }
 
     @Test

@@ -9,6 +9,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -38,4 +39,11 @@ public class MealComboEntity extends BaseEntity {
     @Builder.Default
     @Column(name = "is_active", nullable = false)
     private boolean isActive = true;
+
+    @Column(precision = 10, scale = 2)
+    private BigDecimal price;
+
+    @Builder.Default
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode = "INR";
 }

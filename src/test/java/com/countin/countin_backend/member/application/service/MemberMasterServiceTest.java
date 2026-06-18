@@ -3,6 +3,7 @@ package com.countin.countin_backend.member.application.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -87,6 +88,9 @@ class MemberMasterServiceTest {
     @Mock
     private MealParticipationService mealParticipationService;
 
+    @Mock
+    private InvitationProvisioner invitationProvisioner;
+
     @InjectMocks
     private MemberMasterService memberMasterService;
 
@@ -128,9 +132,10 @@ class MemberMasterServiceTest {
         when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
                 ownerId, spaceId, List.of(MembershipRole.OWNER, MembershipRole.MANAGER)))
                 .thenReturn(true);
-        when(memberRepository.existsBySpaceIdAndMobileNumberAndIsActiveTrue(spaceId, "9123456789"))
-                .thenReturn(false);
+        when(memberRepository.findActiveBySpaceIdAndMobileNumber(spaceId, "9123456789"))
+                .thenReturn(Optional.empty());
         when(userRepository.findByMobileNumber("9123456789")).thenReturn(Optional.empty());
+        when(userRepository.findByIdAndIsActiveTrue(ownerId)).thenReturn(Optional.of(owner));
         when(memberRepository.save(any(MemberEntity.class))).thenAnswer(invocation -> {
             MemberEntity member = invocation.getArgument(0);
             member.setId(memberId);
@@ -144,6 +149,8 @@ class MemberMasterServiceTest {
         assertThat(response.getFullName()).isEqualTo("Rahul Sharma");
         assertThat(response.getRole()).isEqualTo(MembershipRole.TENANT);
         assertThat(response.isLinkedUser()).isFalse();
+        verify(invitationProvisioner)
+                .ensurePendingInvitation(eq(space), eq(owner), eq("9123456789"), eq(MembershipRole.TENANT));
     }
 
     @Test
@@ -161,6 +168,59 @@ class MemberMasterServiceTest {
         assertThatThrownBy(() -> memberMasterService.createMember(spaceId, ownerId, request))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("OWNER role cannot be assigned");
+
+        verify(memberRepository, never()).save(any());
+    }
+
+    @Test
+    void createMember_whenMobileAlreadyUsedByMember_throwsBusinessException() {
+        CreateMemberRequest request = new CreateMemberRequest();
+        setField(request, "fullName", "Duplicate User");
+        setField(request, "mobileNumber", "9123456789");
+        setField(request, "role", MembershipRole.CUSTOMER);
+
+        MemberEntity existing = activeMember("Existing User", "9123456789", MembershipRole.CUSTOMER);
+        existing.setId(UUID.randomUUID());
+
+        when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
+        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
+                ownerId, spaceId, List.of(MembershipRole.OWNER, MembershipRole.MANAGER)))
+                .thenReturn(true);
+        when(memberRepository.findActiveBySpaceIdAndMobileNumber(spaceId, "9123456789"))
+                .thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> memberMasterService.createMember(spaceId, ownerId, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("member with this mobile number already exists")
+                .extracting("status")
+                .isEqualTo(HttpStatus.CONFLICT);
+
+        verify(memberRepository, never()).save(any());
+    }
+
+    @Test
+    void createMember_whenMobileBelongsToExistingAccountInSpace_throwsBusinessException() {
+        CreateMemberRequest request = new CreateMemberRequest();
+        setField(request, "fullName", "Owner As Customer");
+        setField(request, "mobileNumber", owner.getMobileNumber());
+        setField(request, "role", MembershipRole.CUSTOMER);
+
+        when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
+        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
+                ownerId, spaceId, List.of(MembershipRole.OWNER, MembershipRole.MANAGER)))
+                .thenReturn(true);
+        when(memberRepository.findActiveBySpaceIdAndMobileNumber(spaceId, owner.getMobileNumber()))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByMobileNumber(owner.getMobileNumber())).thenReturn(Optional.of(owner));
+        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndStatus(
+                ownerId, spaceId, MembershipStatus.ACTIVE))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> memberMasterService.createMember(spaceId, ownerId, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("account with this mobile number already exists")
+                .extracting("status")
+                .isEqualTo(HttpStatus.CONFLICT);
 
         verify(memberRepository, never()).save(any());
     }

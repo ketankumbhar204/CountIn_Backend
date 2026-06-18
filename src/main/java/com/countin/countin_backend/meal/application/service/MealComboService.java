@@ -13,7 +13,9 @@ import com.countin.countin_backend.meal.infrastructure.persistence.repository.Me
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealComboRepository;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +51,8 @@ public class MealComboService {
                 .space(space)
                 .name(request.getName().trim())
                 .description(request.getDescription())
+                .price(resolvePrice(request.getPrice()))
+                .currencyCode(MealPriceValidator.resolveCurrencyCode(request.getCurrencyCode()))
                 .isActive(true)
                 .build());
         saveComboItems(spaceId, callerId, combo, request.getItemIds(), request.getNewItems());
@@ -61,9 +65,12 @@ public class MealComboService {
         MealComboEntity combo = loadCombo(spaceId, comboId);
         combo.setName(request.getName().trim());
         combo.setDescription(request.getDescription());
+        combo.setPrice(resolvePrice(request.getPrice()));
+        combo.setCurrencyCode(MealPriceValidator.resolveCurrencyCode(request.getCurrencyCode()));
         if (request.getActive() != null) {
             combo.setActive(request.getActive());
         }
+        mealComboRepository.save(combo);
         mealComboItemRepository.deleteByComboId(comboId);
         saveComboItems(spaceId, callerId, combo, request.getItemIds(), request.getNewItems());
         return MealComboResponse.from(combo, mealComboItemRepository.findByComboIdWithItems(combo.getId()));
@@ -120,12 +127,17 @@ public class MealComboService {
         if (resolved.isEmpty()) {
             throw new BusinessException("Combo must include at least one item");
         }
-        return resolved;
+        return new ArrayList<>(new LinkedHashSet<>(resolved));
     }
 
     private SpaceEntity loadSpace(UUID spaceId) {
         return spaceRepository
                 .findById(spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Space", "id", spaceId));
+    }
+
+    private BigDecimal resolvePrice(BigDecimal price) {
+        MealPriceValidator.validateOptionalPrice(price);
+        return price;
     }
 }

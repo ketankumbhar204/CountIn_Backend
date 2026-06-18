@@ -6,6 +6,7 @@ import com.countin.countin_backend.auth.api.dto.response.AuthTokenResponse;
 import com.countin.countin_backend.auth.api.dto.response.SendOtpResponse;
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.common.util.MobileNumberNormalizer;
 import com.countin.countin_backend.config.security.JwtService;
 import com.countin.countin_backend.config.security.UserPrincipal;
 import com.countin.countin_backend.user.api.dto.response.UserResponse;
@@ -25,20 +26,22 @@ public class AuthService {
     private final UserRepository userRepository;
 
     public SendOtpResponse sendOtp(SendOtpRequest request) {
-        otpService.sendOtp(request.getMobileNumber());
+        String mobileNumber = MobileNumberNormalizer.normalize(request.getMobileNumber());
+        otpService.sendOtp(mobileNumber);
 
         return SendOtpResponse.builder()
-                .mobileNumber(request.getMobileNumber())
+                .mobileNumber(mobileNumber)
                 .message("OTP sent successfully")
                 .build();
     }
 
     @Transactional
     public AuthTokenResponse verifyOtp(VerifyOtpRequest request) {
-        otpService.verifyOtp(request.getMobileNumber(), request.getOtp());
+        String mobileNumber = MobileNumberNormalizer.normalize(request.getMobileNumber());
+        otpService.verifyOtp(mobileNumber, request.getOtp());
 
-        UserEntity user = userRepository.findByMobileNumber(request.getMobileNumber())
-                .orElseGet(() -> createUser(request.getMobileNumber()));
+        UserEntity user = userRepository.findByMobileNumber(mobileNumber)
+                .orElseGet(() -> createUser(mobileNumber));
 
         if (!user.isActive()) {
             throw new BusinessException("User account is inactive");
