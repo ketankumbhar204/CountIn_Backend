@@ -49,6 +49,7 @@ public class MealParticipationService {
     private final UserRepository userRepository;
     private final MealPlanService mealPlanService;
     private final MealAccessService mealAccessService;
+    private final MealDeliveryLocationService deliveryLocationService;
 
     @Transactional(readOnly = true)
     public PagedResponse<MealParticipationResponse> listParticipations(
@@ -113,6 +114,7 @@ public class MealParticipationService {
                 .status(MealParticipationStatus.ACTIVE)
                 .effectiveFrom(request.getEffectiveFrom())
                 .effectiveTo(request.getEffectiveTo())
+                .defaultDeliveryLocation(resolveDefaultDeliveryLocation(space, request.getDefaultDeliveryLocationId()))
                 .build();
         participation = participationRepository.save(participation);
         recordHistory(participation, MealParticipationHistoryAction.CREATED, null, plan.getCode().name(), actor);
@@ -141,6 +143,10 @@ public class MealParticipationService {
         }
         if (request.getStatus() != null && request.getStatus() != participation.getStatus()) {
             applyStatusChange(participation, request.getStatus(), actor);
+        }
+        if (request.getDefaultDeliveryLocationId() != null) {
+            participation.setDefaultDeliveryLocation(
+                    resolveDefaultDeliveryLocation(participation.getSpace(), request.getDefaultDeliveryLocationId()));
         }
         return MealParticipationResponse.from(participationRepository.save(participation));
     }
@@ -344,6 +350,18 @@ public class MealParticipationService {
         return userRepository
                 .findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+    }
+
+    private com.countin.countin_backend.meal.infrastructure.persistence.entity.MealDeliveryLocationEntity
+            resolveDefaultDeliveryLocation(SpaceEntity space, UUID locationId) {
+        if (locationId == null) {
+            return null;
+        }
+        if (space.getType() != SpaceType.MESS) {
+            throw new BusinessException(
+                    "Default delivery location is only available for mess spaces", HttpStatus.BAD_REQUEST);
+        }
+        return deliveryLocationService.loadActiveLocation(space.getId(), locationId);
     }
 
     private static String normalizeSearch(String search) {

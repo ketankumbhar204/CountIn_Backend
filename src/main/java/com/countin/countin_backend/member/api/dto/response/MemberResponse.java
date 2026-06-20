@@ -1,5 +1,6 @@
 package com.countin.countin_backend.member.api.dto.response;
 
+import com.countin.countin_backend.member.domain.model.MemberGender;
 import com.countin.countin_backend.member.domain.model.MemberStatus;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
@@ -31,6 +32,9 @@ public class MemberResponse {
     @Schema(description = "Current occupancy assignment state in this space")
     private MemberOccupancyStatus occupancyStatus;
 
+    @Schema(description = "Member gender when recorded")
+    private MemberGender gender;
+
     private LocalDateTime createdAt;
 
     @Schema(description = "Active space membership when the member has CountIn access in this space")
@@ -46,6 +50,7 @@ public class MemberResponse {
                 .membershipId(member.getMembership() != null ? member.getMembership().getId() : null)
                 .status(member.getStatus())
                 .occupancyStatus(member.getOccupancyStatus())
+                .gender(member.getGender())
                 .createdAt(member.getCreatedAt())
                 .build();
     }

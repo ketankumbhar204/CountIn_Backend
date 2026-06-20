@@ -1,0 +1,293 @@
+package com.countin.countin_backend.dashboard.application.service;
+
+import com.countin.countin_backend.common.exception.BusinessException;
+import com.countin.countin_backend.common.exception.ResourceNotFoundException;
+import com.countin.countin_backend.dashboard.api.dto.response.DashboardFinancialSummaryResponse;
+import com.countin.countin_backend.dashboard.api.dto.response.MemberPaymentLedgerResponse;
+import com.countin.countin_backend.dashboard.api.dto.response.MemberPaymentLedgerRowResponse;
+import com.countin.countin_backend.dashboard.application.support.OccupancyBillingCalculator;
+import com.countin.countin_backend.dashboard.domain.model.DashboardFinancialSource;
+import com.countin.countin_backend.dashboard.domain.model.MemberPaymentStatus;
+import com.countin.countin_backend.meal.api.dto.response.MemberMealActivitySummaryResponse;
+import com.countin.countin_backend.meal.application.service.MemberMealActivityService;
+import com.countin.countin_backend.meal.domain.model.MealParticipationStatus;
+import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealParticipationEntity;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealParticipationRepository;
+import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
+import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
+import com.countin.countin_backend.occupancy.infrastructure.persistence.entity.OccupancyEntity;
+import com.countin.countin_backend.occupancy.infrastructure.persistence.repository.OccupancyRepository;
+import com.countin.countin_backend.space.domain.model.SpaceType;
+import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
+import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class SpaceBillingService {
+
+    private static final String DEFAULT_CURRENCY = "INR";
+
+    private final SpaceRepository spaceRepository;
+    private final MemberRepository memberRepository;
+    private final MealParticipationRepository participationRepository;
+    private final OccupancyRepository occupancyRepository;
+    private final MemberMealActivityService memberMealActivityService;
+
+    @Transactional(readOnly = true)
+    public MemberPaymentLedgerResponse buildLedger(UUID spaceId, UUID callerId, String monthParam) {
+        SpaceEntity space = loadSpace(spaceId);
+        YearMonth month = parseMonth(monthParam);
+
+        List<MealParticipationEntity> participations =
+                participationRepository.findAllNonStoppedBySpaceId(spaceId).stream()
+                        .filter(participation -> participation.getStatus() == MealParticipationStatus.ACTIVE)
+                        .toList();
+        List<OccupancyEntity> activeOccupancies = isAccommodationApplicable(space.getType())
+                ? occupancyRepository.findActiveBySpaceId(spaceId)
+                : List.of();
+
+        Set<UUID> memberIds = collectRelevantMemberIds(space.getType(), participations, activeOccupancies);
+        Map<UUID, MemberEntity> membersById = loadMembers(spaceId, memberIds);
+        Map<UUID, OccupancyEntity> occupancyByMember = mapOccupancyByMember(activeOccupancies);
+
+        List<MemberPaymentLedgerRowResponse> rows = new ArrayList<>();
+        for (UUID memberId : memberIds) {
+            MemberEntity member = membersById.get(memberId);
+            if (member == null) {
+                continue;
+            }
+            rows.add(buildRow(
+                    space,
+                    member,
+                    month,
+                    callerId,
+                    participations.stream().anyMatch(row -> row.getMember().getId().equals(memberId)),
+                    occupancyByMember.get(memberId)));
+        }
+
+        rows.sort(Comparator.comparing(MemberPaymentLedgerRowResponse::getPending, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(MemberPaymentLedgerRowResponse::getMemberName, String.CASE_INSENSITIVE_ORDER));
+
+        DashboardFinancialSummaryResponse summary = aggregateRows(rows, space.getType(), !participations.isEmpty());
+
+        return MemberPaymentLedgerResponse.builder()
+                .month(month.toString())
+                .spaceType(space.getType())
+                .summary(summary)
+                .members(rows)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public DashboardFinancialSummaryResponse buildSpaceFinancialSummary(
+            UUID spaceId, UUID callerId, String monthParam) {
+        return buildLedger(spaceId, callerId, monthParam).getSummary();
+    }
+
+    public int countPendingPayments(List<MemberPaymentLedgerRowResponse> rows) {
+        return (int) rows.stream()
+                .filter(row -> row.getStatus() == MemberPaymentStatus.PENDING
+                        || row.getStatus() == MemberPaymentStatus.PARTIAL)
+                .count();
+    }
+
+    private MemberPaymentLedgerRowResponse buildRow(
+            SpaceEntity space,
+            MemberEntity member,
+            YearMonth month,
+            UUID callerId,
+            boolean hasMealParticipation,
+            OccupancyEntity occupancy) {
+        UUID memberId = member.getId();
+        UUID spaceId = space.getId();
+        boolean isMess = space.getType() == SpaceType.MESS;
+        boolean accommodationApplicable = isAccommodationApplicable(space.getType());
+
+        BigDecimal expectedCharges = BigDecimal.ZERO;
+        BigDecimal collected = BigDecimal.ZERO;
+        boolean hasExpected = false;
+        boolean hasCollected = false;
+        String currencyCode = DEFAULT_CURRENCY;
+
+        if (isMess || hasMealParticipation) {
+            MemberMealActivitySummaryResponse mealSummary =
+                    memberMealActivityService.getMonthlyActivity(spaceId, memberId, callerId, month.toString())
+                            .getSummary();
+            if (mealSummary.getAmountGenerated() != null) {
+                expectedCharges = expectedCharges.add(mealSummary.getAmountGenerated());
+                hasExpected = true;
+            }
+            if (mealSummary.getPaidAmount() != null) {
+                collected = collected.add(mealSummary.getPaidAmount());
+                hasCollected = true;
+            }
+            if (mealSummary.getCurrencyCode() != null) {
+                currencyCode = mealSummary.getCurrencyCode();
+            }
+        }
+
+        if (occupancy != null && accommodationApplicable) {
+            BigDecimal occupancyExpected = OccupancyBillingCalculator.computeMonthlyExpected(occupancy);
+            if (occupancyExpected != null) {
+                expectedCharges = expectedCharges.add(occupancyExpected);
+                hasExpected = true;
+            }
+        }
+
+        BigDecimal expected = hasExpected ? expectedCharges : null;
+        BigDecimal collectedAmount = hasCollected ? collected : null;
+        BigDecimal pending = computePending(expected, collectedAmount);
+
+        return MemberPaymentLedgerRowResponse.builder()
+                .memberId(memberId)
+                .memberName(member.getFullName())
+                .expectedCharges(expected)
+                .collected(collectedAmount)
+                .pending(pending)
+                .currencyCode(currencyCode)
+                .status(deriveStatus(expected, collectedAmount))
+                .build();
+    }
+
+    private DashboardFinancialSummaryResponse aggregateRows(
+            List<MemberPaymentLedgerRowResponse> rows, SpaceType spaceType, boolean hasMealParticipation) {
+        BigDecimal expected = sumNullable(rows.stream().map(MemberPaymentLedgerRowResponse::getExpectedCharges).toList());
+        BigDecimal collected = sumNullable(rows.stream().map(MemberPaymentLedgerRowResponse::getCollected).toList());
+        String currencyCode = rows.stream()
+                .map(MemberPaymentLedgerRowResponse::getCurrencyCode)
+                .filter(code -> code != null && !code.isBlank())
+                .findFirst()
+                .orElse(DEFAULT_CURRENCY);
+
+        return DashboardFinancialSummaryResponse.builder()
+                .expectedCharges(expected)
+                .collected(collected)
+                .pending(computePending(expected, collected))
+                .currencyCode(currencyCode)
+                .source(resolveSource(spaceType, hasMealParticipation))
+                .build();
+    }
+
+    private DashboardFinancialSource resolveSource(SpaceType spaceType, boolean hasMealParticipation) {
+        if (spaceType == SpaceType.MESS) {
+            return DashboardFinancialSource.MEAL_ACTIVITY;
+        }
+        if (hasMealParticipation && isAccommodationApplicable(spaceType)) {
+            return DashboardFinancialSource.HYBRID;
+        }
+        if (isAccommodationApplicable(spaceType)) {
+            return DashboardFinancialSource.OCCUPANCY;
+        }
+        return DashboardFinancialSource.API;
+    }
+
+    private Set<UUID> collectRelevantMemberIds(
+            SpaceType spaceType,
+            List<MealParticipationEntity> participations,
+            List<OccupancyEntity> activeOccupancies) {
+        Set<UUID> memberIds = new HashSet<>();
+        if (spaceType == SpaceType.MESS || !participations.isEmpty()) {
+            participations.forEach(participation -> memberIds.add(participation.getMember().getId()));
+        }
+        if (isAccommodationApplicable(spaceType)) {
+            activeOccupancies.forEach(occupancy -> memberIds.add(occupancy.getMember().getId()));
+        }
+        return memberIds;
+    }
+
+    private Map<UUID, MemberEntity> loadMembers(UUID spaceId, Set<UUID> memberIds) {
+        if (memberIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, MemberEntity> membersById = new HashMap<>();
+        for (MemberEntity member : memberRepository.findBySpaceIdAndActiveTrue(spaceId)) {
+            if (memberIds.contains(member.getId())) {
+                membersById.put(member.getId(), member);
+            }
+        }
+        return membersById;
+    }
+
+    private Map<UUID, OccupancyEntity> mapOccupancyByMember(List<OccupancyEntity> occupancies) {
+        Map<UUID, OccupancyEntity> byMember = new HashMap<>();
+        for (OccupancyEntity occupancy : occupancies) {
+            byMember.put(occupancy.getMember().getId(), occupancy);
+        }
+        return byMember;
+    }
+
+    private BigDecimal computePending(BigDecimal expected, BigDecimal collected) {
+        if (expected == null) {
+            return null;
+        }
+        if (collected == null) {
+            return expected.max(BigDecimal.ZERO);
+        }
+        return expected.subtract(collected).max(BigDecimal.ZERO);
+    }
+
+    private MemberPaymentStatus deriveStatus(BigDecimal expected, BigDecimal collected) {
+        if (expected == null || expected.compareTo(BigDecimal.ZERO) <= 0) {
+            return collected != null && collected.compareTo(BigDecimal.ZERO) > 0
+                    ? MemberPaymentStatus.PAID
+                    : MemberPaymentStatus.NONE;
+        }
+        if (collected == null || collected.compareTo(BigDecimal.ZERO) <= 0) {
+            return MemberPaymentStatus.PENDING;
+        }
+        if (collected.compareTo(expected) >= 0) {
+            return MemberPaymentStatus.PAID;
+        }
+        return MemberPaymentStatus.PARTIAL;
+    }
+
+    private BigDecimal sumNullable(List<BigDecimal> values) {
+        BigDecimal total = BigDecimal.ZERO;
+        boolean hasValue = false;
+        for (BigDecimal value : values) {
+            if (value == null) {
+                continue;
+            }
+            total = total.add(value);
+            hasValue = true;
+        }
+        return hasValue ? total : null;
+    }
+
+    private boolean isAccommodationApplicable(SpaceType spaceType) {
+        return spaceType != SpaceType.MESS;
+    }
+
+    private SpaceEntity loadSpace(UUID spaceId) {
+        return spaceRepository
+                .findById(spaceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Space", "id", spaceId));
+    }
+
+    private YearMonth parseMonth(String monthParam) {
+        if (monthParam == null || monthParam.isBlank()) {
+            return YearMonth.now();
+        }
+        try {
+            return YearMonth.parse(monthParam);
+        } catch (DateTimeParseException ex) {
+            throw new BusinessException("Invalid month format. Expected YYYY-MM", HttpStatus.BAD_REQUEST);
+        }
+    }
+}

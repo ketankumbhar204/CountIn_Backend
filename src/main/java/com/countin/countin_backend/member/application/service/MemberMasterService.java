@@ -89,6 +89,7 @@ public class MemberMasterService {
                 .fullName(request.getFullName())
                 .mobileNumber(mobileNumber)
                 .role(request.getRole())
+                .gender(request.getGender())
                 .status(MemberStatus.ACTIVE)
                 .statusUpdatedAt(now)
                 .build();
@@ -185,6 +186,7 @@ public class MemberMasterService {
         member.setFullName(request.getFullName());
         member.setMobileNumber(mobileNumber);
         member.setRole(request.getRole());
+        member.setGender(request.getGender());
         member.setUser(existingUser.orElse(null));
 
         if (existingUser.isPresent()) {

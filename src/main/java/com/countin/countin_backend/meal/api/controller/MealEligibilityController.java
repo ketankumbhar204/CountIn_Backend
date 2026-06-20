@@ -4,8 +4,11 @@ import com.countin.countin_backend.common.security.SecurityUtils;
 import com.countin.countin_backend.common.web.ApiResponse;
 import com.countin.countin_backend.meal.api.dto.response.EligibleParticipantResponse;
 import com.countin.countin_backend.meal.api.dto.response.MealEligibilitySummaryResponse;
+import com.countin.countin_backend.meal.api.dto.response.MealHeadcountDayResponse;
+import com.countin.countin_backend.meal.api.dto.response.MealHeadcountDetailResponse;
 import com.countin.countin_backend.meal.api.dto.response.MealSharePreviewResponse;
 import com.countin.countin_backend.meal.application.service.MealEligibilityService;
+import com.countin.countin_backend.meal.application.service.MealHeadcountService;
 import com.countin.countin_backend.meal.application.service.MealSharePreviewService;
 import com.countin.countin_backend.meal.domain.model.MealType;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MealEligibilityController {
 
     private final MealEligibilityService mealEligibilityService;
+    private final MealHeadcountService mealHeadcountService;
     private final MealSharePreviewService mealSharePreviewService;
 
     @GetMapping("/eligibility-summary")
@@ -61,5 +65,21 @@ public class MealEligibilityController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Meal share preview fetched successfully",
                 mealSharePreviewService.getSharePreview(spaceId, callerId, date, mealType)));
+    }
+
+    @GetMapping("/headcount")
+    public ResponseEntity<ApiResponse<?>> getHeadcount(
+            @org.springframework.web.bind.annotation.PathVariable UUID spaceId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) MealType mealType) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        if (mealType != null) {
+            return ResponseEntity.ok(ApiResponse.success(
+                    "Meal headcount detail fetched successfully",
+                    mealHeadcountService.getMealDetail(spaceId, callerId, date, mealType)));
+        }
+        return ResponseEntity.ok(ApiResponse.success(
+                "Meal headcount summary fetched successfully",
+                mealHeadcountService.getDaySummary(spaceId, callerId, date)));
     }
 }

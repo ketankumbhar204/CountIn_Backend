@@ -2,6 +2,7 @@ package com.countin.countin_backend.meal.infrastructure.persistence.entity;
 
 import com.countin.countin_backend.common.model.BaseEntity;
 import com.countin.countin_backend.meal.domain.model.FoodScope;
+import com.countin.countin_backend.meal.domain.model.FoodType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -54,4 +55,9 @@ public class FoodItemEntity extends BaseEntity {
     @Builder.Default
     @Column(name = "is_custom", nullable = false)
     private boolean isCustom = false;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "food_type", nullable = false, length = 20)
+    private FoodType foodType = FoodType.VEG;
 }

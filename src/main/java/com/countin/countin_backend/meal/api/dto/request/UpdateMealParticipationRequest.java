@@ -14,4 +14,7 @@ public class UpdateMealParticipationRequest {
     private MealParticipationStatus status;
     private LocalDate effectiveFrom;
     private LocalDate effectiveTo;
+
+    /** Default delivery drop point for daily meal selection (Mess spaces). */
+    private UUID defaultDeliveryLocationId;
 }

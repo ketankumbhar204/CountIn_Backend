@@ -7,7 +7,10 @@ import com.countin.countin_backend.meal.api.dto.request.CreateMealParticipationR
 import com.countin.countin_backend.meal.api.dto.request.UpdateMealParticipationRequest;
 import com.countin.countin_backend.meal.api.dto.response.MealParticipationDetailResponse;
 import com.countin.countin_backend.meal.api.dto.response.MealParticipationResponse;
+import com.countin.countin_backend.meal.api.dto.response.MemberMealActivityDayDetailResponse;
+import com.countin.countin_backend.meal.api.dto.response.MemberMealActivityMonthResponse;
 import com.countin.countin_backend.meal.application.service.MealParticipationService;
+import com.countin.countin_backend.meal.application.service.MemberMealActivityService;
 import com.countin.countin_backend.meal.domain.model.MealParticipationStatus;
 import com.countin.countin_backend.meal.domain.model.MealPlanCode;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +40,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MealParticipationController {
 
     private final MealParticipationService mealParticipationService;
+    private final MemberMealActivityService memberMealActivityService;
 
     @GetMapping("/meal-participations")
     @Operation(summary = "List meal participations")
@@ -120,5 +124,53 @@ public class MealParticipationController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Member meal participation fetched successfully",
                 mealParticipationService.getMemberParticipation(spaceId, memberId, callerId)));
+    }
+
+    @GetMapping("/members/{memberId}/meal-activity/{date}")
+    @Operation(summary = "Get member meal activity for a single day (path date)")
+    public ResponseEntity<ApiResponse<MemberMealActivityDayDetailResponse>> getMemberMealActivityDayByPath(
+            @PathVariable UUID spaceId,
+            @PathVariable UUID memberId,
+            @PathVariable String date) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Member meal activity day fetched successfully",
+                memberMealActivityService.getDayDetail(spaceId, memberId, callerId, date)));
+    }
+
+    @GetMapping(value = "/members/{memberId}/meal-activity", params = "date")
+    @Operation(summary = "Get member meal activity for a single day (date query param)")
+    public ResponseEntity<ApiResponse<MemberMealActivityDayDetailResponse>> getMemberMealActivityDayByDate(
+            @PathVariable UUID spaceId,
+            @PathVariable UUID memberId,
+            @RequestParam String date) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Member meal activity day fetched successfully",
+                memberMealActivityService.getDayDetail(spaceId, memberId, callerId, date)));
+    }
+
+    @GetMapping("/members/{memberId}/meal-activity/day")
+    @Operation(summary = "Get member meal activity for a single day")
+    public ResponseEntity<ApiResponse<MemberMealActivityDayDetailResponse>> getMemberMealActivityDay(
+            @PathVariable UUID spaceId,
+            @PathVariable UUID memberId,
+            @RequestParam String date) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Member meal activity day fetched successfully",
+                memberMealActivityService.getDayDetail(spaceId, memberId, callerId, date)));
+    }
+
+    @GetMapping(value = "/members/{memberId}/meal-activity", params = "!date")
+    @Operation(summary = "Get member monthly meal activity")
+    public ResponseEntity<ApiResponse<MemberMealActivityMonthResponse>> getMemberMealActivity(
+            @PathVariable UUID spaceId,
+            @PathVariable UUID memberId,
+            @RequestParam(required = false) String month) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Member meal activity fetched successfully",
+                memberMealActivityService.getMonthlyActivity(spaceId, memberId, callerId, month)));
     }
 }

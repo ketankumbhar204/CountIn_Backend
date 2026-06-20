@@ -12,5 +12,7 @@ public interface MealComboRepository extends JpaRepository<MealComboEntity, UUID
 
     List<MealComboEntity> findBySpaceIdAndIsActiveTrueOrderByNameAsc(UUID spaceId);
 
+    boolean existsBySpaceIdAndNameIgnoreCaseAndIsActiveTrue(UUID spaceId, String name);
+
     Optional<MealComboEntity> findByIdAndSpaceId(UUID id, UUID spaceId);
 }

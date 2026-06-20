@@ -20,5 +20,12 @@ public interface DailyMenuEntryRepository extends JpaRepository<DailyMenuEntryEn
             """)
     List<DailyMenuEntryEntity> findByDailyMenuId(@Param("menuId") UUID menuId);
 
+    @Query("""
+            SELECT COUNT(e) > 0 FROM DailyMenuEntryEntity e
+            WHERE e.dailyMenu.id = :menuId
+              AND e.isAvailable = true
+            """)
+    boolean hasAvailableOptions(@Param("menuId") UUID menuId);
+
     void deleteByDailyMenuId(UUID dailyMenuId);
 }

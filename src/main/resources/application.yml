@@ -27,4 +27,4 @@ countin:
     secret: ${JWT_SECRET:countin-dev-secret-key-must-be-at-least-256-bits-long-for-hs256-algorithm}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
   otp:
-    mvp-code: "123456"
+    mvp-code: "111111"

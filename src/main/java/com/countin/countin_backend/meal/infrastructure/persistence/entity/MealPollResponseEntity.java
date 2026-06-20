@@ -22,7 +22,7 @@ import lombok.Setter;
 @Entity
 @Table(
         name = "meal_poll_responses",
-        uniqueConstraints = @UniqueConstraint(columnNames = {"poll_id", "member_id"}))
+        uniqueConstraints = @UniqueConstraint(columnNames = {"poll_id", "member_id", "selected_option_id"}))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -49,4 +49,8 @@ public class MealPollResponseEntity extends BaseEntity {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private MealPollResponseSource source = MealPollResponseSource.APP;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private int quantity = 1;
 }

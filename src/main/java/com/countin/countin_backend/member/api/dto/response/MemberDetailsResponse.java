@@ -1,6 +1,7 @@
 package com.countin.countin_backend.member.api.dto.response;
 
 import com.countin.countin_backend.meal.api.dto.response.MemberMealParticipationSummaryResponse;
+import com.countin.countin_backend.member.domain.model.MemberGender;
 import com.countin.countin_backend.member.domain.model.MemberStatus;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
@@ -41,6 +42,9 @@ public class MemberDetailsResponse {
 
     @Schema(description = "Whether the member currently holds an accommodation allocation")
     private MemberOccupancyStatus occupancyStatus;
+
+    @Schema(description = "Member gender when recorded")
+    private MemberGender gender;
 
     @Schema(description = "Current accommodation assignment when occupancyStatus is ALLOCATED")
     private CurrentOccupancySummaryResponse currentOccupancy;
@@ -88,6 +92,7 @@ public class MemberDetailsResponse {
                 .active(member.isActive())
                 .status(member.getStatus())
                 .occupancyStatus(member.getOccupancyStatus())
+                .gender(member.getGender())
                 .currentOccupancy(currentOccupancy)
                 .mealParticipation(mealParticipation)
                 .statusUpdatedAt(member.getStatusUpdatedAt())

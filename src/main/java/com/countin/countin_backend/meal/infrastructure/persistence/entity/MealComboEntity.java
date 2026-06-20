@@ -2,8 +2,11 @@ package com.countin.countin_backend.meal.infrastructure.persistence.entity;
 
 import com.countin.countin_backend.common.model.BaseEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
+import com.countin.countin_backend.meal.domain.model.FoodType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
@@ -46,4 +49,9 @@ public class MealComboEntity extends BaseEntity {
     @Builder.Default
     @Column(name = "currency_code", nullable = false, length = 3)
     private String currencyCode = "INR";
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "food_type", nullable = false, length = 20)
+    private FoodType foodType = FoodType.VEG;
 }

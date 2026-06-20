@@ -15,4 +15,7 @@ public interface MealPollRepository extends JpaRepository<MealPollEntity, UUID> 
     Optional<MealPollEntity> findBySpaceIdAndPollDateAndMealType(UUID spaceId, LocalDate pollDate, MealType mealType);
 
     List<MealPollEntity> findBySpaceIdAndPollDateOrderByMealTypeAsc(UUID spaceId, LocalDate pollDate);
+
+    List<MealPollEntity> findBySpaceIdAndPollDateBetweenOrderByPollDateAscMealTypeAsc(
+            UUID spaceId, LocalDate from, LocalDate to);
 }

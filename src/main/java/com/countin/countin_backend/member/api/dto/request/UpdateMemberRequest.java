@@ -1,5 +1,6 @@
 package com.countin.countin_backend.member.api.dto.request;
 
+import com.countin.countin_backend.member.domain.model.MemberGender;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
@@ -23,4 +24,7 @@ public class UpdateMemberRequest {
     @NotNull(message = "Role is required")
     @Schema(description = "Member role", example = "TENANT", implementation = MembershipRole.class)
     private MembershipRole role;
+
+    @Schema(description = "Member gender for PG/hostel occupancy", example = "MALE", implementation = MemberGender.class)
+    private MemberGender gender;
 }

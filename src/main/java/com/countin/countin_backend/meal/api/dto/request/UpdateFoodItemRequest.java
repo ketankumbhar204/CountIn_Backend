@@ -1,5 +1,6 @@
 package com.countin.countin_backend.meal.api.dto.request;
 
+import com.countin.countin_backend.meal.domain.model.FoodType;
 import jakarta.validation.constraints.NotBlank;
 import java.util.UUID;
 import lombok.Getter;
@@ -13,4 +14,6 @@ public class UpdateFoodItemRequest {
     private String name;
 
     private UUID categoryId;
+
+    private FoodType foodType;
 }

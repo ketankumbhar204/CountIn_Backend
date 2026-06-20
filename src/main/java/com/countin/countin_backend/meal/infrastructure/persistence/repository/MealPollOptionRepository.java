@@ -12,6 +12,16 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface MealPollOptionRepository extends JpaRepository<MealPollOptionEntity, UUID> {
 
+    @Query(
+            """
+            SELECT o FROM MealPollOptionEntity o
+            LEFT JOIN FETCH o.dailyMenuEntry e
+            LEFT JOIN FETCH e.combo
+            WHERE o.poll.id = :pollId
+            ORDER BY o.sortOrder ASC
+            """)
+    List<MealPollOptionEntity> findByPollIdWithEntriesOrderBySortOrderAsc(@Param("pollId") UUID pollId);
+
     List<MealPollOptionEntity> findByPollIdOrderBySortOrderAsc(UUID pollId);
 
     @Query("""

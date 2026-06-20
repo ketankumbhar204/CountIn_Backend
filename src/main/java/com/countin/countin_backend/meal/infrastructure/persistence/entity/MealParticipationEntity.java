@@ -68,4 +68,8 @@ public class MealParticipationEntity extends BaseEntity {
 
     @Column(name = "stopped_at")
     private LocalDateTime stoppedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "default_delivery_location_id")
+    private MealDeliveryLocationEntity defaultDeliveryLocation;
 }

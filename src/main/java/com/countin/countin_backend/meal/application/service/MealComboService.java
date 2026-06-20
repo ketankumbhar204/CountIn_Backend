@@ -7,6 +7,7 @@ import com.countin.countin_backend.meal.api.dto.request.CreateFoodItemRequest;
 import com.countin.countin_backend.meal.api.dto.request.CreateMealComboRequest;
 import com.countin.countin_backend.meal.api.dto.request.UpdateMealComboRequest;
 import com.countin.countin_backend.meal.api.dto.response.MealComboResponse;
+import com.countin.countin_backend.meal.domain.policy.FoodTypeResolver;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboItemEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealComboItemRepository;
@@ -56,6 +57,8 @@ public class MealComboService {
                 .isActive(true)
                 .build());
         saveComboItems(spaceId, callerId, combo, request.getItemIds(), request.getNewItems());
+        applyComboFoodType(combo);
+        mealComboRepository.save(combo);
         return MealComboResponse.from(combo, mealComboItemRepository.findByComboIdWithItems(combo.getId()));
     }
 
@@ -73,6 +76,8 @@ public class MealComboService {
         mealComboRepository.save(combo);
         mealComboItemRepository.deleteByComboId(comboId);
         saveComboItems(spaceId, callerId, combo, request.getItemIds(), request.getNewItems());
+        applyComboFoodType(combo);
+        mealComboRepository.save(combo);
         return MealComboResponse.from(combo, mealComboItemRepository.findByComboIdWithItems(combo.getId()));
     }
 
@@ -121,6 +126,7 @@ public class MealComboService {
                 CreateFoodItemRequest itemRequest = new CreateFoodItemRequest();
                 itemRequest.setCategoryId(newItem.getCategoryId());
                 itemRequest.setName(newItem.getName());
+                itemRequest.setFoodType(newItem.getFoodType());
                 resolved.add(foodCatalogService.createItem(spaceId, callerId, itemRequest).getItemId());
             }
         }
@@ -139,5 +145,11 @@ public class MealComboService {
     private BigDecimal resolvePrice(BigDecimal price) {
         MealPriceValidator.validateOptionalPrice(price);
         return price;
+    }
+
+    private void applyComboFoodType(MealComboEntity combo) {
+        List<MealComboItemEntity> comboItems = mealComboItemRepository.findByComboIdWithItems(combo.getId());
+        combo.setFoodType(FoodTypeResolver.resolveStrictestFromItems(
+                comboItems.stream().map(MealComboItemEntity::getItem).toList()));
     }
 }

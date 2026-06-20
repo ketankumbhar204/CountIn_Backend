@@ -24,6 +24,8 @@ public class MealParticipationResponse {
     private LocalDate effectiveFrom;
     private LocalDate effectiveTo;
     private UUID sourceOccupancyId;
+    private UUID defaultDeliveryLocationId;
+    private String defaultDeliveryLocationName;
 
     public static MealParticipationResponse from(MealParticipationEntity entity) {
         return MealParticipationResponse.builder()
@@ -39,6 +41,14 @@ public class MealParticipationResponse {
                 .effectiveTo(entity.getEffectiveTo())
                 .sourceOccupancyId(
                         entity.getSourceOccupancy() != null ? entity.getSourceOccupancy().getId() : null)
+                .defaultDeliveryLocationId(
+                        entity.getDefaultDeliveryLocation() != null
+                                ? entity.getDefaultDeliveryLocation().getId()
+                                : null)
+                .defaultDeliveryLocationName(
+                        entity.getDefaultDeliveryLocation() != null
+                                ? entity.getDefaultDeliveryLocation().getName()
+                                : null)
                 .build();
     }
 }

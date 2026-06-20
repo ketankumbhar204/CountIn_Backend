@@ -19,5 +19,9 @@ public class MealPollResponse {
     private UUID dailyMenuId;
     private List<MealPollOptionResponse> options;
     private UUID mySelectedOptionId;
+    private List<MealPollMySelectionResponse> mySelections;
+    private boolean multiQuantityEnabled;
     private int responseCount;
+    private UUID myDeliveryLocationId;
+    private String myDeliveryLocationName;
 }

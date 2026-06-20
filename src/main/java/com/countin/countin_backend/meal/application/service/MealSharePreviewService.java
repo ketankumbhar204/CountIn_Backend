@@ -17,6 +17,7 @@ import com.countin.countin_backend.meal.infrastructure.persistence.repository.Da
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuPackageItemRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealComboItemRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealParticipationRepository;
+import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
 import java.math.BigDecimal;
@@ -100,7 +101,7 @@ public class MealSharePreviewService {
                 .flatMap(id -> dailyMenuRepository.findById(id))
                 .orElse(null);
 
-        String messageText = buildMessageText(space.getName(), menuDate, mealType, slots);
+        String messageText = buildMessageText(space.getName(), menuDate, mealType, slots, space.getType());
 
         return MealSharePreviewResponse.builder()
                 .spaceName(space.getName())
@@ -160,7 +161,11 @@ public class MealSharePreviewService {
     }
 
     private String buildMessageText(
-            String spaceName, LocalDate menuDate, MealType mealType, List<MealSharePreviewSlotResponse> slots) {
+            String spaceName,
+            LocalDate menuDate,
+            MealType mealType,
+            List<MealSharePreviewSlotResponse> slots,
+            SpaceType spaceType) {
         StringBuilder message = new StringBuilder();
         message.append("🍽 ").append(spaceName).append('\n');
         message.append(DATE_FORMAT.format(menuDate));
@@ -194,6 +199,12 @@ public class MealSharePreviewService {
                     .collect(Collectors.joining(" · ")));
         } else if (!slots.isEmpty()) {
             message.append("Eligible participants: ").append(slots.get(0).getEligibleCount());
+        }
+
+        if (spaceType == SpaceType.MESS) {
+            message.append("\n\nSelect one option.");
+            message.append("\n\nNeed multiple meal selections or quantities?");
+            message.append("\nOpen the CountIn app to manage advanced meal selections.");
         }
 
         return message.toString().trim();

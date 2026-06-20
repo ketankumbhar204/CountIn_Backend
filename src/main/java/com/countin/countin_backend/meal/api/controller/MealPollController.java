@@ -2,6 +2,8 @@ package com.countin.countin_backend.meal.api.controller;
 
 import com.countin.countin_backend.common.security.SecurityUtils;
 import com.countin.countin_backend.common.web.ApiResponse;
+import com.countin.countin_backend.meal.api.dto.request.RejectMealPollPaymentRequest;
+import com.countin.countin_backend.meal.api.dto.request.SubmitMealPollPaymentProofRequest;
 import com.countin.countin_backend.meal.api.dto.request.SubmitMealPollResponsesRequest;
 import com.countin.countin_backend.meal.api.dto.response.MealPollDayResponse;
 import com.countin.countin_backend.meal.api.dto.response.MealPollResponse;
@@ -79,6 +81,40 @@ public class MealPollController {
         UUID callerId = SecurityUtils.getCurrentUserId();
         return ResponseEntity.ok(ApiResponse.success(
                 "Meal poll responses saved successfully",
-                mealPollService.submitResponses(spaceId, callerId, date, request.getSelections())));
+                mealPollService.submitResponses(spaceId, callerId, date, request)));
+    }
+
+    @PostMapping("/{date}/payment-proof")
+    public ResponseEntity<ApiResponse<MealPollDayResponse>> submitPaymentProof(
+            @PathVariable UUID spaceId,
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestBody @Valid SubmitMealPollPaymentProofRequest request) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Payment proof submitted successfully",
+                mealPollService.submitPaymentProof(spaceId, callerId, date, request)));
+    }
+
+    @PostMapping("/{date}/payments/{memberId}/approve")
+    public ResponseEntity<ApiResponse<MealPollDayResponse>> approvePayment(
+            @PathVariable UUID spaceId,
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @PathVariable UUID memberId) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Payment approved successfully",
+                mealPollService.approvePayment(spaceId, callerId, date, memberId)));
+    }
+
+    @PostMapping("/{date}/payments/{memberId}/reject")
+    public ResponseEntity<ApiResponse<MealPollDayResponse>> rejectPayment(
+            @PathVariable UUID spaceId,
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @PathVariable UUID memberId,
+            @RequestBody(required = false) RejectMealPollPaymentRequest request) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Payment proof rejected",
+                mealPollService.rejectPayment(spaceId, callerId, date, memberId, request)));
     }
 }

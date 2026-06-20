@@ -25,6 +25,7 @@ import com.countin.countin_backend.member.api.dto.response.MemberResponse;
 import com.countin.countin_backend.member.domain.model.DocumentVerificationStatus;
 import com.countin.countin_backend.member.domain.model.MemberDocumentType;
 import com.countin.countin_backend.member.domain.model.MemberHistoryAction;
+import com.countin.countin_backend.member.domain.model.MemberGender;
 import com.countin.countin_backend.member.domain.model.MemberStatus;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.domain.model.MembershipStatus;
@@ -151,6 +152,59 @@ class MemberMasterServiceTest {
         assertThat(response.isLinkedUser()).isFalse();
         verify(invitationProvisioner)
                 .ensurePendingInvitation(eq(space), eq(owner), eq("9123456789"), eq(MembershipRole.TENANT));
+    }
+
+    @Test
+    void createMember_persistsGender() {
+        CreateMemberRequest request = new CreateMemberRequest();
+        setField(request, "fullName", "Rahul Sharma");
+        setField(request, "mobileNumber", "9123456789");
+        setField(request, "role", MembershipRole.TENANT);
+        setField(request, "gender", MemberGender.MALE);
+
+        when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
+        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
+                ownerId, spaceId, List.of(MembershipRole.OWNER, MembershipRole.MANAGER)))
+                .thenReturn(true);
+        when(memberRepository.findActiveBySpaceIdAndMobileNumber(spaceId, "9123456789"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByMobileNumber("9123456789")).thenReturn(Optional.empty());
+        when(userRepository.findByIdAndIsActiveTrue(ownerId)).thenReturn(Optional.of(owner));
+        when(memberRepository.save(any(MemberEntity.class))).thenAnswer(invocation -> {
+            MemberEntity member = invocation.getArgument(0);
+            member.setId(memberId);
+            member.setCreatedAt(LocalDateTime.now());
+            return member;
+        });
+
+        MemberResponse response = memberMasterService.createMember(spaceId, ownerId, request);
+
+        assertThat(response.getGender()).isEqualTo(MemberGender.MALE);
+    }
+
+    @Test
+    void updateMember_persistsGender() {
+        MemberEntity member = activeMember("Rahul Sharma", "9123456789", MembershipRole.TENANT);
+        UpdateMemberRequest request = new UpdateMemberRequest();
+        setField(request, "fullName", "Rahul Sharma");
+        setField(request, "mobileNumber", "9123456789");
+        setField(request, "role", MembershipRole.TENANT);
+        setField(request, "gender", MemberGender.FEMALE);
+
+        when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
+        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
+                ownerId, spaceId, List.of(MembershipRole.OWNER, MembershipRole.MANAGER)))
+                .thenReturn(true);
+        when(memberRepository.findByIdAndSpaceIdAndActiveTrue(memberId, spaceId))
+                .thenReturn(Optional.of(member));
+        when(userRepository.findByMobileNumber("9123456789")).thenReturn(Optional.empty());
+        when(memberRepository.save(any(MemberEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MemberDetailsResponse response =
+                memberMasterService.updateMember(spaceId, memberId, ownerId, request);
+
+        assertThat(response.getGender()).isEqualTo(MemberGender.FEMALE);
+        assertThat(member.getGender()).isEqualTo(MemberGender.FEMALE);
     }
 
     @Test

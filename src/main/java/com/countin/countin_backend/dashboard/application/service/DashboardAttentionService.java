@@ -1,0 +1,142 @@
+package com.countin.countin_backend.dashboard.application.service;
+
+import com.countin.countin_backend.dashboard.api.dto.response.DashboardAttentionItemResponse;
+import com.countin.countin_backend.dashboard.domain.model.DashboardAttentionKind;
+import com.countin.countin_backend.meal.api.dto.response.MealEligibilitySummaryResponse;
+import com.countin.countin_backend.meal.api.dto.response.MealPollResponse;
+import com.countin.countin_backend.meal.application.service.MealEligibilityService;
+import com.countin.countin_backend.meal.application.service.MealPollService;
+import com.countin.countin_backend.meal.domain.model.DailyMenuStatus;
+import com.countin.countin_backend.meal.domain.model.MealPollStatus;
+import com.countin.countin_backend.meal.domain.model.MealType;
+import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntity;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuEntryRepository;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuRepository;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@RequiredArgsConstructor
+public class DashboardAttentionService {
+
+    private static final List<MealType> MEAL_TYPES = List.of(MealType.values());
+
+    private final DailyMenuRepository dailyMenuRepository;
+    private final DailyMenuEntryRepository dailyMenuEntryRepository;
+    private final MealEligibilityService mealEligibilityService;
+    private final MealPollService mealPollService;
+
+    @Transactional(readOnly = true)
+    public List<DashboardAttentionItemResponse> resolveAttention(
+            UUID spaceId,
+            UUID callerId,
+            LocalDate tomorrow,
+            int pendingPaymentsCount,
+            BigDecimal overdueAmount,
+            String currencyCode) {
+        List<DashboardAttentionItemResponse> attention = new ArrayList<>();
+
+        resolveMenuAttention(spaceId, callerId, tomorrow).ifPresent(attention::add);
+
+        if (pendingPaymentsCount > 0) {
+            attention.add(DashboardAttentionItemResponse.builder()
+                    .kind(DashboardAttentionKind.PAYMENTS_OVERDUE)
+                    .overdueCount(pendingPaymentsCount)
+                    .overdueAmount(overdueAmount)
+                    .currencyCode(currencyCode)
+                    .build());
+        }
+
+        return attention;
+    }
+
+    public List<DashboardAttentionItemResponse> resolvePaymentsAttention(
+            int pendingPaymentsCount, java.math.BigDecimal overdueAmount, String currencyCode) {
+        if (pendingPaymentsCount <= 0) {
+            return List.of();
+        }
+        return List.of(DashboardAttentionItemResponse.builder()
+                .kind(DashboardAttentionKind.PAYMENTS_OVERDUE)
+                .overdueCount(pendingPaymentsCount)
+                .overdueAmount(overdueAmount)
+                .currencyCode(currencyCode)
+                .build());
+    }
+
+    private Optional<DashboardAttentionItemResponse> resolveMenuAttention(
+            UUID spaceId, UUID callerId, LocalDate tomorrow) {
+        List<DailyMenuEntity> menus =
+                dailyMenuRepository.findBySpaceAndDate(spaceId, tomorrow, false, DailyMenuStatus.DRAFT);
+        MealEligibilitySummaryResponse eligibility = mealEligibilityService.getSummary(spaceId, callerId, tomorrow);
+        List<MealPollResponse> polls = mealPollService.getPollsForDate(spaceId, callerId, tomorrow).getPolls();
+
+        List<MealType> plannedTypes = MEAL_TYPES.stream()
+                .filter(mealType -> isMealPlanned(menus, mealType))
+                .toList();
+        Set<MealType> missingMealTypes = EnumSet.copyOf(MEAL_TYPES);
+        missingMealTypes.removeAll(plannedTypes);
+
+        List<MealType> publishedTypes = MEAL_TYPES.stream()
+                .filter(mealType -> isMealPublished(eligibility, mealType))
+                .toList();
+
+        List<MealPollResponse> openPolls = polls.stream()
+                .filter(poll -> poll.getStatus() == MealPollStatus.OPEN)
+                .toList();
+
+        int eligibleCount = eligibility.getDistinctEligibleMemberCount();
+        int respondedCount = openPolls.stream()
+                .mapToInt(MealPollResponse::getResponseCount)
+                .max()
+                .orElse(0);
+
+        DashboardAttentionItemResponse.DashboardAttentionItemResponseBuilder base =
+                DashboardAttentionItemResponse.builder()
+                        .scheduledCount(plannedTypes.size())
+                        .totalMeals(MEAL_TYPES.size())
+                        .missingMealTypes(new ArrayList<>(missingMealTypes))
+                        .respondedCount(respondedCount)
+                        .eligibleCount(eligibleCount)
+                        .openPollCount(openPolls.size());
+
+        if (plannedTypes.isEmpty()) {
+            return Optional.of(base.kind(DashboardAttentionKind.NOT_PLANNED).build());
+        }
+
+        if (!missingMealTypes.isEmpty()) {
+            return Optional.of(base.kind(DashboardAttentionKind.PARTIAL_PLANNED).build());
+        }
+
+        if (publishedTypes.size() < MEAL_TYPES.size()) {
+            return Optional.of(base.kind(DashboardAttentionKind.READY_TO_SHARE).build());
+        }
+
+        if (!openPolls.isEmpty() && eligibleCount > 0 && respondedCount < eligibleCount) {
+            return Optional.of(base.kind(DashboardAttentionKind.POLL_OPEN).build());
+        }
+
+        return Optional.empty();
+    }
+
+    private boolean isMealPlanned(List<DailyMenuEntity> menus, MealType mealType) {
+        return menus.stream()
+                .filter(menu -> menu.getMealType() == mealType)
+                .findFirst()
+                .map(menu -> dailyMenuEntryRepository.hasAvailableOptions(menu.getId()))
+                .orElse(false);
+    }
+
+    private boolean isMealPublished(MealEligibilitySummaryResponse eligibility, MealType mealType) {
+        return eligibility.getSlots().stream()
+                .anyMatch(slot -> slot.getMealType() == mealType && slot.isPublished());
+    }
+}

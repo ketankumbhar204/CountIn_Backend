@@ -8,6 +8,7 @@ import com.countin.countin_backend.meal.api.dto.request.UpdateFoodItemRequest;
 import com.countin.countin_backend.meal.api.dto.response.FoodCategoryResponse;
 import com.countin.countin_backend.meal.api.dto.response.FoodItemResponse;
 import com.countin.countin_backend.meal.domain.model.FoodScope;
+import com.countin.countin_backend.meal.domain.model.FoodType;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.FoodCategoryEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.FoodItemEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.SpaceFoodCategorySettingsEntity;
@@ -94,6 +95,7 @@ public class FoodCatalogService {
                 .space(space)
                 .isActive(true)
                 .isCustom(true)
+                .foodType(resolveFoodType(request.getFoodType()))
                 .build());
         return FoodItemResponse.from(foodItemRepository
                 .findByIdWithCategory(item.getId())
@@ -110,6 +112,9 @@ public class FoodCatalogService {
             item.setCategory(resolveCategoryForSpaceItem(spaceId, request.getCategoryId()));
         }
         item.setName(request.getName().trim());
+        if (request.getFoodType() != null) {
+            item.setFoodType(request.getFoodType());
+        }
         return FoodItemResponse.from(foodItemRepository.save(item));
     }
 
@@ -221,5 +226,9 @@ public class FoodCatalogService {
         return spaceRepository
                 .findById(spaceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Space", "id", spaceId));
+    }
+
+    private FoodType resolveFoodType(FoodType foodType) {
+        return foodType != null ? foodType : FoodType.VEG;
     }
 }

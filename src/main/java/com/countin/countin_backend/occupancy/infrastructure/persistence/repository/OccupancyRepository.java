@@ -132,4 +132,12 @@ public interface OccupancyRepository extends JpaRepository<OccupancyEntity, UUID
             @Param("bedId") UUID bedId,
             @Param("targetType") AllocationTargetType targetType,
             Pageable pageable);
+
+    @Query("""
+            SELECT o FROM OccupancyEntity o
+            JOIN FETCH o.member
+            WHERE o.space.id = :spaceId
+              AND o.status = com.countin.countin_backend.occupancy.domain.model.OccupancyStatus.ACTIVE
+            """)
+    List<OccupancyEntity> findActiveBySpaceId(@Param("spaceId") UUID spaceId);
 }

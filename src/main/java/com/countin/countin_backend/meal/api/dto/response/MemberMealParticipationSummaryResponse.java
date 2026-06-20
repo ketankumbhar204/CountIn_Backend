@@ -18,6 +18,8 @@ public class MemberMealParticipationSummaryResponse {
     private MealParticipationStatus status;
     private LocalDate effectiveFrom;
     private LocalDate effectiveTo;
+    private UUID defaultDeliveryLocationId;
+    private String defaultDeliveryLocationName;
 
     public static MemberMealParticipationSummaryResponse from(MealParticipationEntity entity) {
         return MemberMealParticipationSummaryResponse.builder()
@@ -27,6 +29,14 @@ public class MemberMealParticipationSummaryResponse {
                 .status(entity.getStatus())
                 .effectiveFrom(entity.getEffectiveFrom())
                 .effectiveTo(entity.getEffectiveTo())
+                .defaultDeliveryLocationId(
+                        entity.getDefaultDeliveryLocation() != null
+                                ? entity.getDefaultDeliveryLocation().getId()
+                                : null)
+                .defaultDeliveryLocationName(
+                        entity.getDefaultDeliveryLocation() != null
+                                ? entity.getDefaultDeliveryLocation().getName()
+                                : null)
                 .build();
     }
 }

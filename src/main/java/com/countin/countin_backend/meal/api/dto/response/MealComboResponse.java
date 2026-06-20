@@ -1,6 +1,7 @@
 package com.countin.countin_backend.meal.api.dto.response;
 
 import com.countin.countin_backend.meal.domain.model.FoodScope;
+import com.countin.countin_backend.meal.domain.model.FoodType;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboItemEntity;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -26,6 +27,8 @@ public class MealComboResponse {
 
     private String currencyCode;
 
+    private FoodType foodType;
+
     private List<MealComboItemLineResponse> items;
 
     public static MealComboResponse from(MealComboEntity entity, List<MealComboItemEntity> comboItems) {
@@ -37,6 +40,7 @@ public class MealComboResponse {
                 .active(entity.isActive())
                 .price(entity.getPrice())
                 .currencyCode(entity.getCurrencyCode())
+                .foodType(entity.getFoodType())
                 .items(comboItems.stream().map(MealComboItemLineResponse::from).toList())
                 .build();
     }

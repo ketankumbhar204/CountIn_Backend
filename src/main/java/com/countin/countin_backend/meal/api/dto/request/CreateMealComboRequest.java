@@ -1,5 +1,6 @@
 package com.countin.countin_backend.meal.api.dto.request;
 
+import com.countin.countin_backend.meal.domain.model.FoodType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.math.BigDecimal;
@@ -21,6 +22,8 @@ public class CreateMealComboRequest {
     private BigDecimal price;
 
     private String currencyCode;
+
+    private FoodType foodType;
 
     private List<UUID> itemIds = new ArrayList<>();
 

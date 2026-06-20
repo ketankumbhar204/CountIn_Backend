@@ -20,4 +20,6 @@ public class CreateMealParticipationRequest {
     private LocalDate effectiveFrom;
 
     private LocalDate effectiveTo;
+
+    private UUID defaultDeliveryLocationId;
 }

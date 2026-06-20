@@ -1,5 +1,6 @@
 package com.countin.countin_backend.meal.api.dto.request;
 
+import com.countin.countin_backend.meal.domain.model.FoodType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.UUID;
@@ -15,4 +16,6 @@ public class CreateComboInlineItemRequest {
 
     @NotBlank
     private String name;
+
+    private FoodType foodType;
 }
