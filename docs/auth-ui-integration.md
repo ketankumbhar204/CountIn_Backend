@@ -17,7 +17,7 @@ CountIn uses **Mobile Number + OTP** authentication. There is **no password** an
 | Session | JWT Bearer token returned after OTP verification |
 | Token lifetime | 24 hours (86,400,000 ms) by default |
 
-**MVP OTP:** Always use `111111` (fixed on backend for development).
+**MVP OTP:** Use value from `countin.otp.mvp-code` in backend `application.yml` (default `111111` for development).
 
 ---
 
@@ -66,7 +66,7 @@ Protected requests also need: `Authorization: Bearer <accessToken>`
 - Button: **Verify & Continue**
 - API: `POST /api/v1/auth/verify-otp`
 - On success → store `accessToken` + `user`, navigate to home
-- MVP hint (dev only): show "Use OTP: 111111" on screen
+- MVP hint (dev only): show "Use OTP: 123456" on screen
 
 ### Screen 3: App bootstrap (on app launch)
 
@@ -167,7 +167,7 @@ Validation errors (`400`) include field map in `data`:
 
 - Show loading spinner on button while request is in flight
 - Disable button if mobile number is invalid
-- No OTP is sent via SMS in MVP — backend logs `111111` to server console
+- No OTP is sent via SMS in MVP — backend logs `123456` to server console
 
 ---
 
@@ -184,7 +184,7 @@ Validation errors (`400`) include field map in `data`:
 ```json
 {
   "mobileNumber": "9876543210",
-  "otp": "111111"
+  "otp": "123456"
 }
 ```
 
@@ -527,7 +527,7 @@ curl -X POST http://localhost:8080/api/v1/auth/send-otp \
 # Step 2: Verify OTP (creates user if new)
 curl -X POST http://localhost:8080/api/v1/auth/verify-otp \
   -H "Content-Type: application/json" \
-  -d '{"mobileNumber":"9876543210","otp":"111111"}'
+  -d '{"mobileNumber":"9876543210","otp":"123456"}'
 
 # Step 3: Get current user (replace TOKEN)
 curl http://localhost:8080/api/v1/auth/me \
@@ -547,7 +547,7 @@ Match these before calling the API to avoid unnecessary 400 errors.
 | Field | Rule | Example valid | Example invalid |
 |-------|------|---------------|-----------------|
 | Mobile | 10 digits, starts 6–9 | `9876543210` | `5876543210`, `98765` |
-| OTP | Exactly 6 digits | `111111` | `12345`, `abcdef` |
+| OTP | Exactly 6 digits | `123456` | `12345`, `abcdef` |
 
 ---
 
@@ -579,7 +579,7 @@ After successful `verify-otp`:
 
 | Feature | Status | UI impact |
 |---------|--------|-----------|
-| Real SMS / WhatsApp OTP | Not built | Show dev hint: OTP is `111111` |
+| Real SMS / WhatsApp OTP | Not built | Show dev hint: OTP is `123456` |
 | Separate registration screen | Not needed | Login screen handles both new + returning users |
 | Profile update API | Not built | `fullName` stays `"User"` until profile API is added |
 | Logout API | Not built | Clear token locally on logout button |
@@ -597,7 +597,7 @@ Build CountIn login flow in React Native using the auth APIs documented in docs/
 
 Screens:
 1. LoginScreen - mobile number input (10 digit Indian), Send OTP button
-2. OtpScreen - 6 digit OTP input, Verify button, dev hint "Use 111111"
+2. OtpScreen - 6 digit OTP input, Verify button, dev hint "Use 123456"
 
 APIs (base URL from Platform.OS):
 - POST /api/v1/auth/send-otp  body: { mobileNumber }
