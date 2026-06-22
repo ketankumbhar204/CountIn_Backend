@@ -14,6 +14,9 @@ public class UpdateMealDeliveryLocationRequest {
     @Size(max = 500)
     private String description;
 
+    @Size(max = 500)
+    private String address;
+
     private Boolean active;
 
     private Integer sortOrder;

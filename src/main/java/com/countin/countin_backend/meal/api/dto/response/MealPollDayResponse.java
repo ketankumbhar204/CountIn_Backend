@@ -3,6 +3,8 @@ package com.countin.countin_backend.meal.api.dto.response;
 import com.countin.countin_backend.meal.domain.model.MealPollPaymentChoice;
 import com.countin.countin_backend.meal.domain.model.MealPollPaymentStatus;
 import com.countin.countin_backend.meal.domain.model.MealType;
+import com.countin.countin_backend.space.domain.model.MealBillingType;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -22,4 +24,8 @@ public class MealPollDayResponse {
     private String myRejectionReason;
     private java.util.List<MealDeliveryLocationResponse> deliveryLocations;
     private Map<MealType, UUID> myLastDeliveryLocationIds;
+    private MealBillingType myMealBillingType;
+    private java.math.BigDecimal myPrepaidOverflowAmount;
+    private java.math.BigDecimal myPrepaidDebitedAmount;
+    private Boolean myPrepaidOverflowPayment;
 }

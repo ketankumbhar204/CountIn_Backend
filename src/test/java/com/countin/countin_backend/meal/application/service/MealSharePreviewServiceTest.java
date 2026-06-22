@@ -1,6 +1,7 @@
 package com.countin.countin_backend.meal.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.countin.countin_backend.common.exception.BusinessException;
@@ -9,6 +10,7 @@ import com.countin.countin_backend.meal.domain.model.DailyMenuStatus;
 import com.countin.countin_backend.meal.domain.model.MealPlanCode;
 import com.countin.countin_backend.meal.domain.model.MealParticipationStatus;
 import com.countin.countin_backend.meal.domain.model.MealType;
+import com.countin.countin_backend.meal.domain.policy.MemberSubscriptionPolicy;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntryEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.FoodItemEntity;
@@ -70,6 +72,9 @@ class MealSharePreviewServiceTest {
     @Mock
     private MemberRepository memberRepository;
 
+    @Mock
+    private MemberSubscriptionPolicy subscriptionPolicy;
+
     private MealSharePreviewService mealSharePreviewService;
 
     private UUID spaceId;
@@ -78,6 +83,7 @@ class MealSharePreviewServiceTest {
 
     @BeforeEach
     void setUp() {
+        when(subscriptionPolicy.canParticipateInPolls(any(), any())).thenReturn(true);
         mealSharePreviewService = new MealSharePreviewService(
                 dailyMenuRepository,
                 dailyMenuEntryRepository,
@@ -85,7 +91,8 @@ class MealSharePreviewServiceTest {
                 dailyMenuPackageItemRepository,
                 participationRepository,
                 spaceRepository,
-                new MealAccessService(new SpaceMembershipResolver(spaceMembershipRepository), memberRepository));
+                new MealAccessService(new SpaceMembershipResolver(spaceMembershipRepository), memberRepository),
+                subscriptionPolicy);
         spaceId = UUID.randomUUID();
         callerId = UUID.randomUUID();
         menuDate = LocalDate.of(2026, 6, 18);

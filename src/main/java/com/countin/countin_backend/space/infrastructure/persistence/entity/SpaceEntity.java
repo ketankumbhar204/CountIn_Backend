@@ -2,6 +2,8 @@ package com.countin.countin_backend.space.infrastructure.persistence.entity;
 
 import com.countin.countin_backend.common.model.BaseEntity;
 import com.countin.countin_backend.space.domain.model.GenderPolicy;
+import com.countin.countin_backend.space.domain.model.MealBillingType;
+import com.countin.countin_backend.space.domain.model.PrepaidBalanceUnit;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
 import jakarta.persistence.Column;
@@ -62,4 +64,17 @@ public class SpaceEntity extends BaseEntity {
     @Builder.Default
     @Column(name = "food_included_in_rent", nullable = false)
     private boolean foodIncludedInRent = false;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "meal_billing_type", nullable = false, length = 20)
+    private MealBillingType mealBillingType = MealBillingType.PAY_PER_MEAL;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "prepaid_balance_unit", length = 10)
+    private PrepaidBalanceUnit prepaidBalanceUnit;
+
+    @Builder.Default
+    @Column(name = "prepaid_fallback_to_pay_per_meal", nullable = false)
+    private boolean prepaidFallbackToPayPerMeal = true;
 }

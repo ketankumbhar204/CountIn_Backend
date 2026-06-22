@@ -148,13 +148,14 @@ public class AccommodationLazyListService {
 
     @Transactional(readOnly = true)
     public PagedResponse<BedListItemResponse> listBedsByRoom(
-            UUID spaceId, UUID roomId, UUID callerId, Pageable pageable) {
+            UUID spaceId, UUID roomId, UUID callerId, String query, AccommodationStatus status, Pageable pageable) {
         log.info("Listing beds (lazy): spaceId={}, roomId={}, callerId={}", spaceId, roomId, callerId);
 
         accessService.assertCanViewStructure(spaceId, callerId);
         assertRoomInSpace(spaceId, roomId);
 
-        Page<BedListItemResponse> page = lazyListRepository.findBedListItemsByRoomId(roomId, pageable);
+        Page<BedListItemResponse> page = lazyListRepository.findBedListItemsByRoomId(
+                roomId, normalizeQuery(query), status, pageable);
         return PagedResponse.from(page);
     }
 

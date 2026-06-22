@@ -10,6 +10,7 @@ import com.countin.countin_backend.meal.api.dto.response.MemberMealActivityMonth
 import com.countin.countin_backend.meal.api.dto.response.MemberMealActivitySelectionResponse;
 import com.countin.countin_backend.meal.api.dto.response.MemberMealActivitySlotDetailResponse;
 import com.countin.countin_backend.meal.api.dto.response.MemberMealActivitySlotResponse;
+import com.countin.countin_backend.meal.api.dto.response.MemberMealActivitySubscriptionResponse;
 import com.countin.countin_backend.meal.api.dto.response.MemberMealActivitySummaryResponse;
 import com.countin.countin_backend.meal.api.dto.response.MealPollOptionResponse;
 import com.countin.countin_backend.meal.domain.model.DailyMenuStatus;
@@ -19,6 +20,7 @@ import com.countin.countin_backend.meal.domain.model.MealPollStatus;
 import com.countin.countin_backend.meal.domain.model.MealType;
 import com.countin.countin_backend.meal.domain.model.MemberMealActivitySlotStatus;
 import com.countin.countin_backend.meal.domain.policy.MealEligibilityEngine;
+import com.countin.countin_backend.meal.application.support.MealBillingResolver;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealParticipationEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealPollDayPaymentEntity;
@@ -33,6 +35,9 @@ import com.countin.countin_backend.meal.infrastructure.persistence.repository.Me
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealPollResponseRepository;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
+import com.countin.countin_backend.space.domain.model.MealBillingType;
+import com.countin.countin_backend.space.domain.model.PrepaidBalanceUnit;
+import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -65,6 +70,9 @@ public class MemberMealActivityService {
     private final MealPollDayPaymentRepository dayPaymentRepository;
     private final DailyMenuService dailyMenuService;
     private final MealAccessService mealAccessService;
+    private final SpaceRepository spaceRepository;
+    private final MemberMealBalanceService memberMealBalanceService;
+    private final MealBillingResolver mealBillingResolver;
 
     @Transactional(readOnly = true)
     public MemberMealActivityMonthResponse getMonthlyActivity(
@@ -186,17 +194,53 @@ public class MemberMealActivityService {
 
         return MemberMealActivityMonthResponse.builder()
                 .month(month.toString())
-                .summary(MemberMealActivitySummaryResponse.builder()
+                .summary(buildSummary(
+                        member,
+                        month,
+                        acceptedMeals,
+                        pendingResponses,
+                        skippedMeals,
+                        amountGenerated,
+                        paidAmount,
+                        pendingAmount))
+                .days(days)
+                .build();
+    }
+
+    private MemberMealActivitySummaryResponse buildSummary(
+            MemberEntity member,
+            YearMonth month,
+            int acceptedMeals,
+            int pendingResponses,
+            int skippedMeals,
+            BigDecimal amountGenerated,
+            BigDecimal paidAmount,
+            BigDecimal pendingAmount) {
+        UUID spaceId = member.getSpace().getId();
+        UUID memberId = member.getId();
+        MemberMealActivitySummaryResponse.MemberMealActivitySummaryResponseBuilder builder =
+                MemberMealActivitySummaryResponse.builder()
                         .acceptedMeals(acceptedMeals)
                         .pendingResponses(pendingResponses)
                         .skippedMeals(skippedMeals)
                         .amountGenerated(amountGenerated.compareTo(BigDecimal.ZERO) > 0 ? amountGenerated : null)
                         .paidAmount(paidAmount.compareTo(BigDecimal.ZERO) > 0 ? paidAmount : null)
                         .pendingAmount(pendingAmount.compareTo(BigDecimal.ZERO) > 0 ? pendingAmount : null)
-                        .currencyCode("INR")
-                        .build())
-                .days(days)
-                .build();
+                        .currencyCode("INR");
+
+        if (mealBillingResolver.isPrepaid(member.getSpace(), member)) {
+            var balance = memberMealBalanceService.findBalance(spaceId, memberId);
+            builder
+                    .balanceRemaining(balance != null ? balance.getBalance() : BigDecimal.ZERO)
+                    .balancePurchased(memberMealBalanceService.sumPurchased(spaceId, memberId, month))
+                    .balanceConsumed(memberMealBalanceService.sumConsumed(spaceId, memberId, month))
+                    .amountPaidThisMonth(memberMealBalanceService.sumPaid(spaceId, memberId, month))
+                    .balanceUnit(member.getSpace().getPrepaidBalanceUnit() != null
+                            ? member.getSpace().getPrepaidBalanceUnit()
+                            : PrepaidBalanceUnit.MEALS);
+        }
+
+        return builder.build();
     }
 
     @Transactional(readOnly = true)
@@ -293,10 +337,29 @@ public class MemberMealActivityService {
                 .dayTotal(dayTotal.compareTo(BigDecimal.ZERO) > 0 ? dayTotal : null)
                 .currencyCode("INR")
                 .payment(payment)
-                .subscription(null)
+                .subscription(buildBalanceSubscription(member, date))
                 .notes(notes)
                 .dailyCharges(dailyCharges)
                 .slots(slots)
+                .build();
+    }
+
+    private MemberMealActivitySubscriptionResponse buildBalanceSubscription(
+            MemberEntity member, LocalDate date) {
+        if (!mealBillingResolver.isPrepaid(member.getSpace(), member)) {
+            return null;
+        }
+        UUID spaceId = member.getSpace().getId();
+        UUID memberId = member.getId();
+        var balance = memberMealBalanceService.findBalance(spaceId, memberId);
+        BigDecimal remaining = balance != null ? balance.getBalance() : BigDecimal.ZERO;
+        YearMonth month = YearMonth.from(date);
+        BigDecimal consumed = memberMealBalanceService.sumConsumed(spaceId, memberId, month);
+        return MemberMealActivitySubscriptionResponse.builder()
+                .planName("Meal balance")
+                .creditsRemaining(remaining.intValue())
+                .creditsConsumed(consumed.intValue())
+                .coveredBySubscription(remaining.compareTo(BigDecimal.ZERO) > 0)
                 .build();
     }
 
@@ -323,6 +386,9 @@ public class MemberMealActivityService {
                 .rejectionReason(payment.getRejectionReason())
                 .proofSubmittedAt(payment.getProofSubmittedAt())
                 .proofReviewedAt(payment.getProofReviewedAt())
+                .prepaidOverflowAmount(payment.getPrepaidOverflowAmount())
+                .prepaidDebitedAmount(payment.getPrepaidDebitedAmount())
+                .prepaidOverflowPayment(payment.isPrepaidOverflowPayment())
                 .build();
     }
 

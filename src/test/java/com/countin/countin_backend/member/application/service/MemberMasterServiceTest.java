@@ -183,6 +183,34 @@ class MemberMasterServiceTest {
     }
 
     @Test
+    void createMember_persistsMealBillingType() {
+        CreateMemberRequest request = new CreateMemberRequest();
+        setField(request, "fullName", "Rahul Sharma");
+        setField(request, "mobileNumber", "9123456789");
+        setField(request, "role", MembershipRole.CUSTOMER);
+        setField(request, "mealBillingType", com.countin.countin_backend.space.domain.model.MealBillingType.PREPAID_BALANCE);
+
+        when(spaceRepository.findByIdAndIsActiveTrue(spaceId)).thenReturn(Optional.of(space));
+        when(spaceMembershipRepository.existsByUserIdAndSpaceIdAndRoleIn(
+                ownerId, spaceId, List.of(MembershipRole.OWNER, MembershipRole.MANAGER)))
+                .thenReturn(true);
+        when(memberRepository.findActiveBySpaceIdAndMobileNumber(spaceId, "9123456789"))
+                .thenReturn(Optional.empty());
+        when(userRepository.findByMobileNumber("9123456789")).thenReturn(Optional.empty());
+        when(userRepository.findByIdAndIsActiveTrue(ownerId)).thenReturn(Optional.of(owner));
+        when(memberRepository.save(any(MemberEntity.class))).thenAnswer(invocation -> {
+            MemberEntity member = invocation.getArgument(0);
+            member.setId(memberId);
+            member.setCreatedAt(LocalDateTime.now());
+            assertThat(member.getMealBillingType())
+                    .isEqualTo(com.countin.countin_backend.space.domain.model.MealBillingType.PREPAID_BALANCE);
+            return member;
+        });
+
+        memberMasterService.createMember(spaceId, ownerId, request);
+    }
+
+    @Test
     void updateMember_persistsGender() {
         MemberEntity member = activeMember("Rahul Sharma", "9123456789", MembershipRole.TENANT);
         UpdateMemberRequest request = new UpdateMemberRequest();

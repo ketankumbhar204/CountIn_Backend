@@ -11,6 +11,7 @@ import com.countin.countin_backend.accommodation.application.service.Accommodati
 import com.countin.countin_backend.accommodation.application.service.AccommodationDeletionService;
 import com.countin.countin_backend.accommodation.application.service.AccommodationRestoreService;
 import com.countin.countin_backend.accommodation.application.service.BedService;
+import com.countin.countin_backend.accommodation.domain.model.AccommodationStatus;
 import com.countin.countin_backend.common.security.SecurityUtils;
 import com.countin.countin_backend.common.web.ApiResponse;
 import com.countin.countin_backend.common.web.PagedResponse;
@@ -84,6 +85,8 @@ public class BedController {
             @PathVariable UUID spaceId,
             @PathVariable UUID roomId,
             @RequestParam(defaultValue = "summary") String view,
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) AccommodationStatus status,
             @PageableDefault(size = 20, sort = "bedNumber") Pageable pageable) {
         UUID callerId = SecurityUtils.getCurrentUserId();
         if ("full".equalsIgnoreCase(view)) {
@@ -91,7 +94,7 @@ public class BedController {
             return ResponseEntity.ok(ApiResponse.success(beds));
         }
         PagedResponse<BedListItemResponse> beds =
-                lazyListService.listBedsByRoom(spaceId, roomId, callerId, pageable);
+                lazyListService.listBedsByRoom(spaceId, roomId, callerId, query, status, pageable);
         return ResponseEntity.ok(ApiResponse.success(beds));
     }
 

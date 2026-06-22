@@ -1,11 +1,13 @@
 package com.countin.countin_backend.meal.application.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.countin.countin_backend.meal.domain.model.MealParticipationStatus;
 import com.countin.countin_backend.meal.domain.model.MealPlanCode;
 import com.countin.countin_backend.meal.domain.model.MealType;
+import com.countin.countin_backend.meal.domain.policy.MemberSubscriptionPolicy;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealParticipationEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealPlanEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealParticipationRepository;
@@ -45,6 +47,9 @@ class MealEligibilityServiceTest {
     @Mock
     private MemberRepository memberRepository;
 
+    @Mock
+    private MemberSubscriptionPolicy subscriptionPolicy;
+
     private MealEligibilityService mealEligibilityService;
 
     private UUID spaceId;
@@ -52,10 +57,12 @@ class MealEligibilityServiceTest {
 
     @BeforeEach
     void setUp() {
+        when(subscriptionPolicy.canParticipateInPolls(any(), any())).thenReturn(true);
         mealEligibilityService = new MealEligibilityService(
                 participationRepository,
                 dailyMenuService,
-                new MealAccessService(new SpaceMembershipResolver(spaceMembershipRepository), memberRepository));
+                new MealAccessService(new SpaceMembershipResolver(spaceMembershipRepository), memberRepository),
+                subscriptionPolicy);
         spaceId = UUID.randomUUID();
         callerId = UUID.randomUUID();
     }

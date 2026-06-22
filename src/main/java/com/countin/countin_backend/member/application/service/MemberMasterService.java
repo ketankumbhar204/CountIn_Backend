@@ -90,6 +90,7 @@ public class MemberMasterService {
                 .mobileNumber(mobileNumber)
                 .role(request.getRole())
                 .gender(request.getGender())
+                .mealBillingType(request.getMealBillingType())
                 .status(MemberStatus.ACTIVE)
                 .statusUpdatedAt(now)
                 .build();
@@ -119,6 +120,18 @@ public class MemberMasterService {
                 : memberRepository.findBySpaceIdAndActiveTrue(spaceId);
 
         return members.stream().map(MemberResponse::from).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public MemberResponse getMyLinkedMember(UUID spaceId, UUID callerId) {
+        assertSpaceExists(spaceId);
+        assertCallerBelongsToSpace(spaceId, callerId);
+
+        MemberEntity member = memberRepository
+                .findActiveBySpaceIdAndUserId(spaceId, callerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Member", "linkedUser", callerId));
+
+        return MemberResponse.from(member);
     }
 
     private static String normalizeSearch(String search) {
@@ -187,6 +200,7 @@ public class MemberMasterService {
         member.setMobileNumber(mobileNumber);
         member.setRole(request.getRole());
         member.setGender(request.getGender());
+        member.setMealBillingType(request.getMealBillingType());
         member.setUser(existingUser.orElse(null));
 
         if (existingUser.isPresent()) {

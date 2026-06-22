@@ -14,6 +14,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -65,4 +66,14 @@ public class MealPollDayPaymentEntity extends BaseEntity {
 
     @Column(name = "rejection_reason", columnDefinition = "TEXT")
     private String rejectionReason;
+
+    @Column(name = "prepaid_overflow_amount", precision = 12, scale = 2)
+    private BigDecimal prepaidOverflowAmount;
+
+    @Column(name = "prepaid_debited_amount", precision = 12, scale = 2)
+    private BigDecimal prepaidDebitedAmount;
+
+    @Builder.Default
+    @Column(name = "prepaid_overflow_payment", nullable = false)
+    private boolean prepaidOverflowPayment = false;
 }

@@ -1,6 +1,8 @@
 package com.countin.countin_backend.dashboard.api.dto.response;
 
 import com.countin.countin_backend.dashboard.domain.model.MemberPaymentStatus;
+import com.countin.countin_backend.space.domain.model.MealBillingType;
+import com.countin.countin_backend.space.domain.model.PrepaidBalanceUnit;
 import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.Builder;
@@ -17,4 +19,9 @@ public class MemberPaymentLedgerRowResponse {
     private BigDecimal pending;
     private String currencyCode;
     private MemberPaymentStatus status;
+    private MealBillingType mealBillingType;
+    private BigDecimal mealBalanceRemaining;
+    private BigDecimal mealBalancePurchased;
+    private BigDecimal mealBalanceConsumed;
+    private PrepaidBalanceUnit mealBalanceUnit;
 }

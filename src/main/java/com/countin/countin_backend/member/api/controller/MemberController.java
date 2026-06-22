@@ -79,6 +79,16 @@ public class MemberController {
         return ResponseEntity.ok(ApiResponse.success(members));
     }
 
+    @GetMapping("/members/me")
+    @Operation(
+            summary = "Get my linked member profile",
+            description = "Returns the member master record linked to the signed-in user in this space.")
+    public ResponseEntity<ApiResponse<MemberResponse>> getMyLinkedMember(@PathVariable UUID spaceId) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        MemberResponse response = memberMasterService.getMyLinkedMember(spaceId, callerId);
+        return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
     @GetMapping("/members/{memberId}")
     @Operation(summary = "Get member details", description = "Returns complete member master details.")
     public ResponseEntity<ApiResponse<MemberDetailsResponse>> getMember(

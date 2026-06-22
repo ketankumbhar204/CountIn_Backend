@@ -21,4 +21,5 @@ public class DashboardAttentionItemResponse {
     private Integer overdueCount;
     private BigDecimal overdueAmount;
     private String currencyCode;
+    private Integer pendingSubscriptionRequestCount;
 }

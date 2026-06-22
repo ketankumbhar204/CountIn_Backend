@@ -8,6 +8,7 @@ import com.countin.countin_backend.meal.domain.model.DailyMenuEntryType;
 import com.countin.countin_backend.meal.domain.model.DailyMenuStatus;
 import com.countin.countin_backend.meal.domain.model.MealType;
 import com.countin.countin_backend.meal.domain.policy.MealEligibilityEngine;
+import com.countin.countin_backend.meal.domain.policy.MemberSubscriptionPolicy;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntryEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboItemEntity;
@@ -50,6 +51,7 @@ public class MealSharePreviewService {
     private final MealParticipationRepository participationRepository;
     private final SpaceRepository spaceRepository;
     private final MealAccessService mealAccessService;
+    private final MemberSubscriptionPolicy subscriptionPolicy;
 
     @Transactional(readOnly = true)
     public MealSharePreviewResponse getSharePreview(
@@ -152,10 +154,15 @@ public class MealSharePreviewService {
     private int countEligible(List<MealParticipationEntity> participations, LocalDate date, MealType mealType) {
         int count = 0;
         for (MealParticipationEntity participation : participations) {
-            if (MealEligibilityEngine.isEligibleForPollAudience(
+            if (!MealEligibilityEngine.isEligibleForPollAudience(
                     participation.getMember(), participation, date, mealType)) {
-                count++;
+                continue;
             }
+            if (!subscriptionPolicy.canParticipateInPolls(
+                    participation.getSpace(), participation.getMember())) {
+                continue;
+            }
+            count++;
         }
         return count;
     }

@@ -7,6 +7,7 @@ import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
 import com.countin.countin_backend.occupancy.api.dto.response.CurrentOccupancySummaryResponse;
 import com.countin.countin_backend.occupancy.domain.model.MemberOccupancyStatus;
+import com.countin.countin_backend.space.domain.model.MealBillingType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -63,6 +64,12 @@ public class MemberDetailsResponse {
     @Schema(description = "Computed deposit balance: depositPaid minus depositRefunded")
     private BigDecimal depositBalance;
 
+    @Schema(description = "Member meal billing override; null inherits the space default")
+    private MealBillingType mealBillingType;
+
+    @Schema(description = "Effective meal billing type after applying space default")
+    private MealBillingType effectiveMealBillingType;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -103,8 +110,20 @@ public class MemberDetailsResponse {
                 .depositPaid(member.getDepositPaid())
                 .depositRefunded(member.getDepositRefunded())
                 .depositBalance(depositBalance)
+                .mealBillingType(member.getMealBillingType())
+                .effectiveMealBillingType(resolveEffectiveMealBillingType(member))
                 .createdAt(member.getCreatedAt())
                 .updatedAt(member.getUpdatedAt())
                 .build();
+    }
+
+    private static MealBillingType resolveEffectiveMealBillingType(MemberEntity member) {
+        if (member.getMealBillingType() != null) {
+            return member.getMealBillingType();
+        }
+        if (member.getSpace() != null && member.getSpace().getMealBillingType() != null) {
+            return member.getSpace().getMealBillingType();
+        }
+        return MealBillingType.PAY_PER_MEAL;
     }
 }

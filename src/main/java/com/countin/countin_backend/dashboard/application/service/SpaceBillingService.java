@@ -5,11 +5,14 @@ import com.countin.countin_backend.common.exception.ResourceNotFoundException;
 import com.countin.countin_backend.dashboard.api.dto.response.DashboardFinancialSummaryResponse;
 import com.countin.countin_backend.dashboard.api.dto.response.MemberPaymentLedgerResponse;
 import com.countin.countin_backend.dashboard.api.dto.response.MemberPaymentLedgerRowResponse;
+import com.countin.countin_backend.dashboard.api.dto.response.PrepaidBalanceSummaryResponse;
+import com.countin.countin_backend.dashboard.application.support.MealLedgerContribution;
 import com.countin.countin_backend.dashboard.application.support.OccupancyBillingCalculator;
+import com.countin.countin_backend.dashboard.application.support.PayPerMealBillingCalculator;
+import com.countin.countin_backend.dashboard.application.support.PrepaidBalanceBillingCalculator;
 import com.countin.countin_backend.dashboard.domain.model.DashboardFinancialSource;
 import com.countin.countin_backend.dashboard.domain.model.MemberPaymentStatus;
-import com.countin.countin_backend.meal.api.dto.response.MemberMealActivitySummaryResponse;
-import com.countin.countin_backend.meal.application.service.MemberMealActivityService;
+import com.countin.countin_backend.meal.application.support.MealBillingResolver;
 import com.countin.countin_backend.meal.domain.model.MealParticipationStatus;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealParticipationEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealParticipationRepository;
@@ -17,11 +20,12 @@ import com.countin.countin_backend.member.infrastructure.persistence.entity.Memb
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
 import com.countin.countin_backend.occupancy.infrastructure.persistence.entity.OccupancyEntity;
 import com.countin.countin_backend.occupancy.infrastructure.persistence.repository.OccupancyRepository;
+import com.countin.countin_backend.space.domain.model.MealBillingType;
+import com.countin.countin_backend.space.domain.model.PrepaidBalanceUnit;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -47,7 +51,9 @@ public class SpaceBillingService {
     private final MemberRepository memberRepository;
     private final MealParticipationRepository participationRepository;
     private final OccupancyRepository occupancyRepository;
-    private final MemberMealActivityService memberMealActivityService;
+    private final PayPerMealBillingCalculator payPerMealBillingCalculator;
+    private final PrepaidBalanceBillingCalculator prepaidBalanceBillingCalculator;
+    private final MealBillingResolver mealBillingResolver;
 
     @Transactional(readOnly = true)
     public MemberPaymentLedgerResponse buildLedger(UUID spaceId, UUID callerId, String monthParam) {
@@ -84,7 +90,8 @@ public class SpaceBillingService {
         rows.sort(Comparator.comparing(MemberPaymentLedgerRowResponse::getPending, Comparator.nullsLast(Comparator.reverseOrder()))
                 .thenComparing(MemberPaymentLedgerRowResponse::getMemberName, String.CASE_INSENSITIVE_ORDER));
 
-        DashboardFinancialSummaryResponse summary = aggregateRows(rows, space.getType(), !participations.isEmpty());
+        DashboardFinancialSummaryResponse summary =
+                aggregateRows(rows, space, month, !participations.isEmpty());
 
         return MemberPaymentLedgerResponse.builder()
                 .month(month.toString())
@@ -118,6 +125,7 @@ public class SpaceBillingService {
         UUID spaceId = space.getId();
         boolean isMess = space.getType() == SpaceType.MESS;
         boolean accommodationApplicable = isAccommodationApplicable(space.getType());
+        MealBillingType memberBillingType = mealBillingResolver.resolve(space, member);
 
         BigDecimal expectedCharges = BigDecimal.ZERO;
         BigDecimal collected = BigDecimal.ZERO;
@@ -126,19 +134,18 @@ public class SpaceBillingService {
         String currencyCode = DEFAULT_CURRENCY;
 
         if (isMess || hasMealParticipation) {
-            MemberMealActivitySummaryResponse mealSummary =
-                    memberMealActivityService.getMonthlyActivity(spaceId, memberId, callerId, month.toString())
-                            .getSummary();
-            if (mealSummary.getAmountGenerated() != null) {
-                expectedCharges = expectedCharges.add(mealSummary.getAmountGenerated());
+            MealLedgerContribution mealContribution = computeMealContribution(
+                    space, memberBillingType, spaceId, memberId, callerId, month);
+            if (mealContribution.getExpected() != null) {
+                expectedCharges = expectedCharges.add(mealContribution.getExpected());
                 hasExpected = true;
             }
-            if (mealSummary.getPaidAmount() != null) {
-                collected = collected.add(mealSummary.getPaidAmount());
+            if (mealContribution.getCollected() != null) {
+                collected = collected.add(mealContribution.getCollected());
                 hasCollected = true;
             }
-            if (mealSummary.getCurrencyCode() != null) {
-                currencyCode = mealSummary.getCurrencyCode();
+            if (mealContribution.getCurrencyCode() != null) {
+                currencyCode = mealContribution.getCurrencyCode();
             }
         }
 
@@ -154,33 +161,97 @@ public class SpaceBillingService {
         BigDecimal collectedAmount = hasCollected ? collected : null;
         BigDecimal pending = computePending(expected, collectedAmount);
 
-        return MemberPaymentLedgerRowResponse.builder()
-                .memberId(memberId)
-                .memberName(member.getFullName())
-                .expectedCharges(expected)
-                .collected(collectedAmount)
-                .pending(pending)
-                .currencyCode(currencyCode)
-                .status(deriveStatus(expected, collectedAmount))
-                .build();
+        MemberPaymentLedgerRowResponse.MemberPaymentLedgerRowResponseBuilder rowBuilder =
+                MemberPaymentLedgerRowResponse.builder()
+                        .memberId(memberId)
+                        .memberName(member.getFullName())
+                        .expectedCharges(expected)
+                        .collected(collectedAmount)
+                        .pending(pending)
+                        .currencyCode(currencyCode)
+                        .status(deriveStatus(expected, collectedAmount))
+                        .mealBillingType(memberBillingType);
+
+        if (memberBillingType == MealBillingType.PREPAID_BALANCE) {
+            PrepaidBalanceBillingCalculator.MemberMonthlyBalance monthlyBalance =
+                    prepaidBalanceBillingCalculator.memberMonthlyBalance(spaceId, memberId, month);
+            PrepaidBalanceUnit unit = space.getPrepaidBalanceUnit() != null
+                    ? space.getPrepaidBalanceUnit()
+                    : PrepaidBalanceUnit.MEALS;
+            rowBuilder
+                    .mealBalanceRemaining(monthlyBalance.remaining())
+                    .mealBalancePurchased(monthlyBalance.purchased())
+                    .mealBalanceConsumed(monthlyBalance.consumed())
+                    .mealBalanceUnit(unit);
+        }
+
+        return rowBuilder.build();
+    }
+
+    private MealLedgerContribution computeMealContribution(
+            SpaceEntity space,
+            MealBillingType memberBillingType,
+            UUID spaceId,
+            UUID memberId,
+            UUID callerId,
+            YearMonth month) {
+        if (memberBillingType == MealBillingType.PREPAID_BALANCE) {
+            return prepaidBalanceBillingCalculator.computeMemberContribution(
+                    space, spaceId, memberId, callerId, month, payPerMealBillingCalculator);
+        }
+        return payPerMealBillingCalculator.computeMemberContribution(spaceId, memberId, callerId, month);
     }
 
     private DashboardFinancialSummaryResponse aggregateRows(
-            List<MemberPaymentLedgerRowResponse> rows, SpaceType spaceType, boolean hasMealParticipation) {
-        BigDecimal expected = sumNullable(rows.stream().map(MemberPaymentLedgerRowResponse::getExpectedCharges).toList());
-        BigDecimal collected = sumNullable(rows.stream().map(MemberPaymentLedgerRowResponse::getCollected).toList());
+            List<MemberPaymentLedgerRowResponse> rows,
+            SpaceEntity space,
+            YearMonth month,
+            boolean hasMealParticipation) {
+        boolean messSpace = space.getType() == SpaceType.MESS;
+        boolean hasPrepaidMembers = messSpace
+                && rows.stream().anyMatch(row -> row.getMealBillingType() == MealBillingType.PREPAID_BALANCE);
+        boolean hasPayPerMealMembers = messSpace
+                && rows.stream().anyMatch(row -> row.getMealBillingType() != MealBillingType.PREPAID_BALANCE);
+        boolean mixedMealBilling = hasPrepaidMembers && hasPayPerMealMembers;
+
+        PrepaidBalanceSummaryResponse prepaidBalance = hasPrepaidMembers
+                ? prepaidBalanceBillingCalculator.aggregateSpaceSummary(space, month)
+                : null;
+
+        BigDecimal expected;
+        BigDecimal collected;
+        if (messSpace && hasPrepaidMembers && !hasPayPerMealMembers) {
+            expected = null;
+            collected = prepaidBalance != null ? prepaidBalance.getAmountCollected() : null;
+        } else {
+            List<MemberPaymentLedgerRowResponse> payPerMealRows = messSpace
+                    ? rows.stream()
+                            .filter(row -> row.getMealBillingType() != MealBillingType.PREPAID_BALANCE)
+                            .toList()
+                    : rows;
+            expected = sumNullable(
+                    payPerMealRows.stream().map(MemberPaymentLedgerRowResponse::getExpectedCharges).toList());
+            collected = sumNullable(
+                    payPerMealRows.stream().map(MemberPaymentLedgerRowResponse::getCollected).toList());
+        }
+
         String currencyCode = rows.stream()
                 .map(MemberPaymentLedgerRowResponse::getCurrencyCode)
                 .filter(code -> code != null && !code.isBlank())
                 .findFirst()
-                .orElse(DEFAULT_CURRENCY);
+                .orElse(prepaidBalance != null && prepaidBalance.getCurrencyCode() != null
+                        ? prepaidBalance.getCurrencyCode()
+                        : DEFAULT_CURRENCY);
 
         return DashboardFinancialSummaryResponse.builder()
                 .expectedCharges(expected)
                 .collected(collected)
                 .pending(computePending(expected, collected))
                 .currencyCode(currencyCode)
-                .source(resolveSource(spaceType, hasMealParticipation))
+                .source(resolveSource(space.getType(), hasMealParticipation))
+                .mealBillingType(space.getMealBillingType())
+                .prepaidBalance(prepaidBalance)
+                .mixedMealBilling(mixedMealBilling ? true : null)
                 .build();
     }
 

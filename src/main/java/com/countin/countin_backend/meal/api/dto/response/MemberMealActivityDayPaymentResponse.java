@@ -16,4 +16,7 @@ public class MemberMealActivityDayPaymentResponse {
     private String rejectionReason;
     private LocalDateTime proofSubmittedAt;
     private LocalDateTime proofReviewedAt;
+    private java.math.BigDecimal prepaidOverflowAmount;
+    private java.math.BigDecimal prepaidDebitedAmount;
+    private boolean prepaidOverflowPayment;
 }

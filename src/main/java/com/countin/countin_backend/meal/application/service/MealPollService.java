@@ -1,6 +1,8 @@
 package com.countin.countin_backend.meal.application.service;
 
 import com.countin.countin_backend.common.exception.BusinessException;
+import com.countin.countin_backend.meal.domain.model.MealPollPaymentEventType;
+import com.countin.countin_backend.meal.api.dto.request.ApproveMealPollPaymentRequest;
 import com.countin.countin_backend.meal.api.dto.request.RejectMealPollPaymentRequest;
 import com.countin.countin_backend.meal.api.dto.request.SubmitMealPollPaymentProofRequest;
 import com.countin.countin_backend.meal.api.dto.request.SubmitMealPollResponsesRequest;
@@ -21,6 +23,8 @@ import com.countin.countin_backend.meal.domain.model.MealPollResponseSource;
 import com.countin.countin_backend.meal.domain.model.MealPollStatus;
 import com.countin.countin_backend.meal.domain.model.MealType;
 import com.countin.countin_backend.meal.domain.policy.MealEligibilityEngine;
+import com.countin.countin_backend.meal.domain.policy.MemberSubscriptionPolicy;
+import com.countin.countin_backend.meal.application.support.MealBillingResolver;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntryEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealComboItemEntity;
@@ -45,9 +49,11 @@ import com.countin.countin_backend.meal.infrastructure.persistence.repository.Me
 import com.countin.countin_backend.member.infrastructure.persistence.entity.MemberEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
 import com.countin.countin_backend.member.infrastructure.persistence.repository.MemberRepository;
+import com.countin.countin_backend.space.domain.model.MealBillingType;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.space.infrastructure.persistence.repository.SpaceRepository;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -82,6 +88,10 @@ public class MealPollService {
     private final SpaceRepository spaceRepository;
     private final MemberRepository memberRepository;
     private final MealAccessService mealAccessService;
+    private final MemberMealBalanceService memberMealBalanceService;
+    private final MealBillingResolver mealBillingResolver;
+    private final MealPollPaymentEventService paymentEventService;
+    private final MemberSubscriptionPolicy subscriptionPolicy;
 
     @Transactional(readOnly = true)
     public MealPollDayResponse getPollsForDate(UUID spaceId, UUID callerId, LocalDate date) {
@@ -100,6 +110,10 @@ public class MealPollService {
         String myRejectionReason = null;
         Map<MealType, UUID> myLastDeliveryLocationIds = Map.of();
         List<MealDeliveryLocationResponse> deliveryLocations = List.of();
+        MealBillingType myMealBillingType = null;
+        BigDecimal myPrepaidOverflowAmount = null;
+        BigDecimal myPrepaidDebitedAmount = null;
+        Boolean myPrepaidOverflowPayment = null;
 
         SpaceEntity space = spaceRepository
                 .findById(spaceId)
@@ -113,6 +127,13 @@ public class MealPollService {
         }
 
         if (memberId != null) {
+            MemberEntity member = memberRepository
+                    .findByIdAndSpaceIdAndActiveTrue(memberId, spaceId)
+                    .orElse(null);
+            if (member != null) {
+                myMealBillingType = mealBillingResolver.resolve(space, member);
+            }
+
             Optional<MealPollDayPaymentEntity> payment =
                     dayPaymentRepository.findBySpaceIdAndMemberIdAndPollDate(spaceId, memberId, pollDate);
             if (payment.isPresent()) {
@@ -121,6 +142,9 @@ public class MealPollService {
                 myPaymentChoice = row.getPaymentChoice();
                 myProofImageUrl = row.getProofImageUrl();
                 myRejectionReason = row.getRejectionReason();
+                myPrepaidOverflowAmount = row.getPrepaidOverflowAmount();
+                myPrepaidDebitedAmount = row.getPrepaidDebitedAmount();
+                myPrepaidOverflowPayment = row.isPrepaidOverflowPayment() ? true : null;
             }
 
             myLastDeliveryLocationIds = loadLastDeliveryLocationIds(spaceId, memberId);
@@ -135,6 +159,10 @@ public class MealPollService {
                 .myRejectionReason(myRejectionReason)
                 .deliveryLocations(deliveryLocations)
                 .myLastDeliveryLocationIds(myLastDeliveryLocationIds)
+                .myMealBillingType(myMealBillingType)
+                .myPrepaidOverflowAmount(myPrepaidOverflowAmount)
+                .myPrepaidDebitedAmount(myPrepaidDebitedAmount)
+                .myPrepaidOverflowPayment(myPrepaidOverflowPayment)
                 .build();
     }
 
@@ -238,10 +266,20 @@ public class MealPollService {
                 .findById(spaceId)
                 .orElseThrow(() -> new BusinessException("Space not found", HttpStatus.NOT_FOUND));
         boolean multiQuantity = space.getType() == SpaceType.MESS;
+        MealBillingType memberBillingType = mealBillingResolver.resolve(space, member);
+        boolean prepaidBilling = memberBillingType == MealBillingType.PREPAID_BALANCE;
 
-        if (multiQuantity && paymentChoice == null) {
+        if (prepaidBilling && !subscriptionPolicy.canParticipateInPolls(space, member)) {
+            throw new BusinessException(
+                    "An active meal subscription is required to select meals",
+                    HttpStatus.FORBIDDEN);
+        }
+
+        if (multiQuantity && paymentChoice == null && !prepaidBilling) {
             throw new BusinessException("Select a payment option to continue", HttpStatus.BAD_REQUEST);
         }
+
+        BigDecimal prepaidOverflowCurrency = BigDecimal.ZERO;
 
         for (SubmitMealPollSelectionRequest selection : selections) {
             MealPollEntity poll = loadPoll(spaceId, pollDate, selection.getMealType());
@@ -278,9 +316,19 @@ public class MealPollService {
                 upsertMemberDelivery(poll, member, deliveryLocationId);
                 lastDeliveryService.saveLastDeliveryLocation(participation, selection.getMealType(), deliveryLocationId);
             }
+
+            if (prepaidBilling) {
+                MealPollEntity savedPoll = loadPoll(spaceId, pollDate, selection.getMealType());
+                prepaidOverflowCurrency = prepaidOverflowCurrency.add(
+                        memberMealBalanceService.syncPollDebit(space, member, savedPoll));
+            }
         }
 
-        if (multiQuantity && paymentChoice != null) {
+        if (prepaidBilling && prepaidOverflowCurrency.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal debitedAmount =
+                    memberMealBalanceService.sumDebitedOnDate(space.getId(), member.getId(), pollDate);
+            upsertPrepaidOverflowDayPayment(space, member, pollDate, prepaidOverflowCurrency, debitedAmount);
+        } else if (multiQuantity && paymentChoice != null) {
             upsertDayPayment(space, member, pollDate, paymentChoice, proofImageBase64);
         }
 
@@ -326,12 +374,27 @@ public class MealPollService {
         payment.setProofReviewedBy(null);
         payment.setRejectionReason(null);
         dayPaymentRepository.save(payment);
+        paymentEventService.recordEvent(
+                space,
+                member,
+                pollDate,
+                MealPollPaymentEventType.PROOF_SUBMITTED,
+                payment.getPaymentStatus(),
+                payment.getPaymentChoice(),
+                null,
+                null,
+                callerId);
 
         return getPollsForDate(spaceId, callerId, pollDate);
     }
 
     @Transactional
-    public MealPollDayResponse approvePayment(UUID spaceId, UUID callerId, LocalDate date, UUID memberId) {
+    public MealPollDayResponse approvePayment(
+            UUID spaceId,
+            UUID callerId,
+            LocalDate date,
+            UUID memberId,
+            ApproveMealPollPaymentRequest request) {
         mealAccessService.requireManageMeals(spaceId, callerId);
         LocalDate pollDate = date != null ? date : LocalDate.now();
 
@@ -348,6 +411,11 @@ public class MealPollService {
         payment.setProofReviewedBy(callerId);
         payment.setRejectionReason(null);
         dayPaymentRepository.save(payment);
+        paymentEventService.recordFromPayment(
+                payment,
+                MealPollPaymentEventType.APPROVED,
+                request != null ? request.getApprovalRemarks() : null,
+                callerId);
 
         return getPollsForDate(spaceId, callerId, pollDate);
     }
@@ -371,8 +439,73 @@ public class MealPollService {
         payment.setProofReviewedBy(callerId);
         payment.setRejectionReason(request != null ? request.getRejectionReason() : null);
         dayPaymentRepository.save(payment);
+        paymentEventService.recordFromPayment(
+                payment,
+                MealPollPaymentEventType.REJECTED,
+                request != null ? request.getRejectionReason() : null,
+                callerId);
 
         return getPollsForDate(spaceId, callerId, pollDate);
+    }
+
+    @Transactional
+    public MealPollDayResponse sendPaymentReminder(UUID spaceId, UUID callerId, LocalDate date, UUID memberId) {
+        mealAccessService.requireManageMeals(spaceId, callerId);
+        LocalDate pollDate = date != null ? date : LocalDate.now();
+
+        MealPollDayPaymentEntity payment = dayPaymentRepository
+                .findBySpaceIdAndMemberIdAndPollDate(spaceId, memberId, pollDate)
+                .orElseThrow(() -> new BusinessException("Payment record not found", HttpStatus.NOT_FOUND));
+
+        if (payment.getPaymentStatus() != MealPollPaymentStatus.PENDING
+                && payment.getPaymentStatus() != MealPollPaymentStatus.REJECTED) {
+            throw new BusinessException("Payment is not awaiting collection", HttpStatus.BAD_REQUEST);
+        }
+
+        paymentEventService.recordFromPayment(
+                payment, MealPollPaymentEventType.REMINDER_SENT, "Payment reminder sent", callerId);
+
+        return getPollsForDate(spaceId, callerId, pollDate);
+    }
+
+    private void upsertPrepaidOverflowDayPayment(
+            SpaceEntity space,
+            MemberEntity member,
+            LocalDate pollDate,
+            BigDecimal overflowAmount,
+            BigDecimal debitedAmount) {
+        MealPollDayPaymentEntity payment = dayPaymentRepository
+                .findBySpaceIdAndMemberIdAndPollDate(space.getId(), member.getId(), pollDate)
+                .orElse(MealPollDayPaymentEntity.builder()
+                        .space(space)
+                        .member(member)
+                        .pollDate(pollDate)
+                        .build());
+
+        payment.setPaymentChoice(MealPollPaymentChoice.PAY_LATER);
+        payment.setPaymentStatus(MealPollPaymentStatus.PENDING);
+        payment.setProofImageUrl(null);
+        payment.setProofSubmittedAt(null);
+        payment.setProofReviewedAt(null);
+        payment.setProofReviewedBy(null);
+        payment.setRejectionReason(null);
+        payment.setPrepaidOverflowPayment(true);
+        payment.setPrepaidOverflowAmount(overflowAmount);
+        payment.setPrepaidDebitedAmount(debitedAmount);
+        dayPaymentRepository.save(payment);
+        paymentEventService.recordEvent(
+                space,
+                member,
+                pollDate,
+                MealPollPaymentEventType.PREPAID_OVERFLOW_PAY_LATER,
+                payment.getPaymentStatus(),
+                payment.getPaymentChoice(),
+                overflowAmount,
+                "Balance used: "
+                        + debitedAmount.stripTrailingZeros().toPlainString()
+                        + ", pay-per-meal due: "
+                        + overflowAmount.stripTrailingZeros().toPlainString(),
+                null);
     }
 
     private void upsertDayPayment(
@@ -400,6 +533,9 @@ public class MealPollService {
 
         payment.setPaymentChoice(paymentChoice);
         payment.setPaymentStatus(paymentStatus);
+        payment.setPrepaidOverflowPayment(false);
+        payment.setPrepaidOverflowAmount(null);
+        payment.setPrepaidDebitedAmount(null);
 
         if (paymentChoice == MealPollPaymentChoice.MARK_AS_PAID) {
             payment.setProofImageUrl(normalizeProofImage(proofImageBase64));
@@ -416,6 +552,18 @@ public class MealPollService {
         }
 
         dayPaymentRepository.save(payment);
+        paymentEventService.recordEvent(
+                space,
+                member,
+                pollDate,
+                paymentChoice == MealPollPaymentChoice.PAY_LATER
+                        ? MealPollPaymentEventType.PAY_LATER_SELECTED
+                        : MealPollPaymentEventType.MARK_AS_PAID_SELECTED,
+                paymentStatus,
+                paymentChoice,
+                null,
+                null,
+                null);
     }
 
     private void validateProofImage(String proofImageBase64) {

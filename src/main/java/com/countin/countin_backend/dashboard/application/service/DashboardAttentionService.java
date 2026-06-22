@@ -4,14 +4,18 @@ import com.countin.countin_backend.dashboard.api.dto.response.DashboardAttention
 import com.countin.countin_backend.dashboard.domain.model.DashboardAttentionKind;
 import com.countin.countin_backend.meal.api.dto.response.MealEligibilitySummaryResponse;
 import com.countin.countin_backend.meal.api.dto.response.MealPollResponse;
+import com.countin.countin_backend.meal.application.service.MealAccessService;
 import com.countin.countin_backend.meal.application.service.MealEligibilityService;
 import com.countin.countin_backend.meal.application.service.MealPollService;
+import com.countin.countin_backend.meal.domain.model.SubscriptionActivationRequestStatus;
+import com.countin.countin_backend.member.infrastructure.persistence.entity.SpaceMembershipEntity;
 import com.countin.countin_backend.meal.domain.model.DailyMenuStatus;
 import com.countin.countin_backend.meal.domain.model.MealPollStatus;
 import com.countin.countin_backend.meal.domain.model.MealType;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.DailyMenuEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuEntryRepository;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.DailyMenuRepository;
+import com.countin.countin_backend.meal.infrastructure.persistence.repository.SubscriptionActivationRequestRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -34,6 +38,8 @@ public class DashboardAttentionService {
     private final DailyMenuEntryRepository dailyMenuEntryRepository;
     private final MealEligibilityService mealEligibilityService;
     private final MealPollService mealPollService;
+    private final MealAccessService mealAccessService;
+    private final SubscriptionActivationRequestRepository subscriptionActivationRequestRepository;
 
     @Transactional(readOnly = true)
     public List<DashboardAttentionItemResponse> resolveAttention(
@@ -45,6 +51,7 @@ public class DashboardAttentionService {
             String currencyCode) {
         List<DashboardAttentionItemResponse> attention = new ArrayList<>();
 
+        resolveSubscriptionActivationAttention(spaceId, callerId).ifPresent(attention::add);
         resolveMenuAttention(spaceId, callerId, tomorrow).ifPresent(attention::add);
 
         if (pendingPaymentsCount > 0) {
@@ -69,6 +76,27 @@ public class DashboardAttentionService {
                 .overdueCount(pendingPaymentsCount)
                 .overdueAmount(overdueAmount)
                 .currencyCode(currencyCode)
+                .build());
+    }
+
+    private Optional<DashboardAttentionItemResponse> resolveSubscriptionActivationAttention(
+            UUID spaceId, UUID callerId) {
+        SpaceMembershipEntity membership = mealAccessService.requireViewMeals(spaceId, callerId);
+        if (!mealAccessService.canManageMeals(membership)) {
+            return Optional.empty();
+        }
+
+        int pendingCount = subscriptionActivationRequestRepository
+                .findBySpaceIdAndStatusOrderByCreatedAtDesc(
+                        spaceId, SubscriptionActivationRequestStatus.PENDING)
+                .size();
+        if (pendingCount <= 0) {
+            return Optional.empty();
+        }
+
+        return Optional.of(DashboardAttentionItemResponse.builder()
+                .kind(DashboardAttentionKind.SUBSCRIPTION_ACTIVATION_PENDING)
+                .pendingSubscriptionRequestCount(pendingCount)
                 .build());
     }
 

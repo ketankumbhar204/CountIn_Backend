@@ -19,6 +19,9 @@ public class Space {
     private boolean active;
     private BigDecimal defaultFoodCharge;
     private boolean foodIncludedInRent;
+    private MealBillingType mealBillingType;
+    private PrepaidBalanceUnit prepaidBalanceUnit;
+    private boolean prepaidFallbackToPayPerMeal;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -9,7 +9,9 @@ import com.countin.countin_backend.meal.api.dto.response.MealParticipationDetail
 import com.countin.countin_backend.meal.api.dto.response.MealParticipationResponse;
 import com.countin.countin_backend.meal.api.dto.response.MemberMealActivityDayDetailResponse;
 import com.countin.countin_backend.meal.api.dto.response.MemberMealActivityMonthResponse;
+import com.countin.countin_backend.meal.api.dto.response.MealPollPaymentEventResponse;
 import com.countin.countin_backend.meal.application.service.MealParticipationService;
+import com.countin.countin_backend.meal.application.service.MealPollPaymentEventService;
 import com.countin.countin_backend.meal.application.service.MemberMealActivityService;
 import com.countin.countin_backend.meal.domain.model.MealParticipationStatus;
 import com.countin.countin_backend.meal.domain.model.MealPlanCode;
@@ -17,6 +19,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +44,7 @@ public class MealParticipationController {
 
     private final MealParticipationService mealParticipationService;
     private final MemberMealActivityService memberMealActivityService;
+    private final MealPollPaymentEventService paymentEventService;
 
     @GetMapping("/meal-participations")
     @Operation(summary = "List meal participations")
@@ -172,5 +176,17 @@ public class MealParticipationController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Member meal activity fetched successfully",
                 memberMealActivityService.getMonthlyActivity(spaceId, memberId, callerId, month)));
+    }
+
+    @GetMapping("/members/{memberId}/meal-payment-events")
+    @Operation(summary = "Get member meal payment event timeline")
+    public ResponseEntity<ApiResponse<List<MealPollPaymentEventResponse>>> getMemberMealPaymentEvents(
+            @PathVariable UUID spaceId,
+            @PathVariable UUID memberId,
+            @RequestParam(required = false) String month) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Member meal payment events fetched successfully",
+                paymentEventService.listForMemberMonth(spaceId, memberId, callerId, month)));
     }
 }

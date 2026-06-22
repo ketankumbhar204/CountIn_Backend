@@ -36,6 +36,9 @@ public class MealDeliveryLocationEntity extends BaseEntity {
     @Column(length = 500)
     private String description;
 
+    @Column(length = 500)
+    private String address;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;

@@ -2,6 +2,7 @@ package com.countin.countin_backend.meal.api.controller;
 
 import com.countin.countin_backend.common.security.SecurityUtils;
 import com.countin.countin_backend.common.web.ApiResponse;
+import com.countin.countin_backend.meal.api.dto.request.ApproveMealPollPaymentRequest;
 import com.countin.countin_backend.meal.api.dto.request.RejectMealPollPaymentRequest;
 import com.countin.countin_backend.meal.api.dto.request.SubmitMealPollPaymentProofRequest;
 import com.countin.countin_backend.meal.api.dto.request.SubmitMealPollResponsesRequest;
@@ -99,11 +100,12 @@ public class MealPollController {
     public ResponseEntity<ApiResponse<MealPollDayResponse>> approvePayment(
             @PathVariable UUID spaceId,
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
-            @PathVariable UUID memberId) {
+            @PathVariable UUID memberId,
+            @RequestBody(required = false) ApproveMealPollPaymentRequest request) {
         UUID callerId = SecurityUtils.getCurrentUserId();
         return ResponseEntity.ok(ApiResponse.success(
                 "Payment approved successfully",
-                mealPollService.approvePayment(spaceId, callerId, date, memberId)));
+                mealPollService.approvePayment(spaceId, callerId, date, memberId, request)));
     }
 
     @PostMapping("/{date}/payments/{memberId}/reject")
@@ -116,5 +118,16 @@ public class MealPollController {
         return ResponseEntity.ok(ApiResponse.success(
                 "Payment proof rejected",
                 mealPollService.rejectPayment(spaceId, callerId, date, memberId, request)));
+    }
+
+    @PostMapping("/{date}/payments/{memberId}/remind")
+    public ResponseEntity<ApiResponse<MealPollDayResponse>> sendPaymentReminder(
+            @PathVariable UUID spaceId,
+            @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @PathVariable UUID memberId) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Payment reminder recorded",
+                mealPollService.sendPaymentReminder(spaceId, callerId, date, memberId)));
     }
 }

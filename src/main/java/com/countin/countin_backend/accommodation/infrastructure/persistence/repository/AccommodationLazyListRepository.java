@@ -231,6 +231,12 @@ public interface AccommodationLazyListRepository extends Repository<FloorEntity,
             )
             FROM BedEntity b
             WHERE b.room.id = :roomId AND b.isActive = true
+              AND (:query IS NULL OR :query = '' OR LOWER(b.bedNumber) LIKE LOWER(CONCAT('%', :query, '%')))
+              AND (:status IS NULL OR b.status = :status)
             """)
-    Page<BedListItemResponse> findBedListItemsByRoomId(@Param("roomId") UUID roomId, Pageable pageable);
+    Page<BedListItemResponse> findBedListItemsByRoomId(
+            @Param("roomId") UUID roomId,
+            @Param("query") String query,
+            @Param("status") AccommodationStatus status,
+            Pageable pageable);
 }

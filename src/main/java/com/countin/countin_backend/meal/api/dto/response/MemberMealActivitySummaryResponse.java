@@ -15,4 +15,9 @@ public class MemberMealActivitySummaryResponse {
     private BigDecimal paidAmount;
     private BigDecimal pendingAmount;
     private String currencyCode;
+    private BigDecimal balanceRemaining;
+    private BigDecimal balancePurchased;
+    private BigDecimal balanceConsumed;
+    private BigDecimal amountPaidThisMonth;
+    private com.countin.countin_backend.space.domain.model.PrepaidBalanceUnit balanceUnit;
 }

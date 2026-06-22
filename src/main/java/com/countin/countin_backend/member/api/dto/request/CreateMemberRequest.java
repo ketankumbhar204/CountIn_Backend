@@ -2,6 +2,7 @@ package com.countin.countin_backend.member.api.dto.request;
 
 import com.countin.countin_backend.member.domain.model.MemberGender;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
+import com.countin.countin_backend.space.domain.model.MealBillingType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -27,4 +28,10 @@ public class CreateMemberRequest {
 
     @Schema(description = "Member gender for PG/hostel occupancy", example = "MALE", implementation = MemberGender.class)
     private MemberGender gender;
+
+    @Schema(
+            description = "Meal billing override for this member; null uses the space default",
+            example = "PREPAID_BALANCE",
+            implementation = MealBillingType.class)
+    private MealBillingType mealBillingType;
 }

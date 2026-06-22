@@ -21,6 +21,9 @@ public final class SpaceMapper {
                 .active(entity.isActive())
                 .defaultFoodCharge(entity.getDefaultFoodCharge())
                 .foodIncludedInRent(entity.isFoodIncludedInRent())
+                .mealBillingType(entity.getMealBillingType())
+                .prepaidBalanceUnit(entity.getPrepaidBalanceUnit())
+                .prepaidFallbackToPayPerMeal(entity.isPrepaidFallbackToPayPerMeal())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();
@@ -44,6 +47,9 @@ public final class SpaceMapper {
         entity.setContactNumber(space.getContactNumber());
         entity.setDefaultFoodCharge(space.getDefaultFoodCharge());
         entity.setFoodIncludedInRent(space.isFoodIncludedInRent());
+        entity.setMealBillingType(space.getMealBillingType());
+        entity.setPrepaidBalanceUnit(space.getPrepaidBalanceUnit());
+        entity.setPrepaidFallbackToPayPerMeal(space.isPrepaidFallbackToPayPerMeal());
     }
 
     public static SpaceDetailsResponse toDetailsResponse(Space space) {

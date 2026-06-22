@@ -12,6 +12,7 @@ public class MealDeliveryLocationResponse {
     private UUID id;
     private String name;
     private String description;
+    private String address;
     private boolean active;
     private int sortOrder;
 
@@ -20,6 +21,7 @@ public class MealDeliveryLocationResponse {
                 .id(entity.getId())
                 .name(entity.getName())
                 .description(entity.getDescription())
+                .address(entity.getAddress())
                 .active(entity.isActive())
                 .sortOrder(entity.getSortOrder())
                 .build();

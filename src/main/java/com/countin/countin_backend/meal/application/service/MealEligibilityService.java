@@ -7,6 +7,7 @@ import com.countin.countin_backend.meal.api.dto.response.MealEligibilitySummaryR
 import com.countin.countin_backend.meal.domain.model.MealPlanCode;
 import com.countin.countin_backend.meal.domain.model.MealType;
 import com.countin.countin_backend.meal.domain.policy.MealEligibilityEngine;
+import com.countin.countin_backend.meal.domain.policy.MemberSubscriptionPolicy;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealParticipationEntity;
 import com.countin.countin_backend.meal.infrastructure.persistence.repository.MealParticipationRepository;
 import java.time.LocalDate;
@@ -29,6 +30,7 @@ public class MealEligibilityService {
     private final MealParticipationRepository participationRepository;
     private final DailyMenuService dailyMenuService;
     private final MealAccessService mealAccessService;
+    private final MemberSubscriptionPolicy subscriptionPolicy;
 
     @Transactional(readOnly = true)
     public MealEligibilitySummaryResponse getSummary(UUID spaceId, UUID callerId, LocalDate date) {
@@ -44,8 +46,7 @@ public class MealEligibilityService {
             Map<MealPlanCode, PlanAccumulator> byPlanCounts = new EnumMap<>(MealPlanCode.class);
 
             for (MealParticipationEntity participation : participations) {
-                if (MealEligibilityEngine.isEligibleForPollAudience(
-                        participation.getMember(), participation, targetDate, mealType)) {
+                if (isPollEligible(participation, targetDate, mealType)) {
                     eligibleCount++;
                     distinctEligibleMemberIds.add(participation.getMember().getId());
                     MealPlanCode planCode = participation.getMealPlan().getCode();
@@ -89,8 +90,7 @@ public class MealEligibilityService {
         mealAccessService.requireManageMeals(spaceId, callerId);
         LocalDate targetDate = date != null ? date : LocalDate.now();
         return participationRepository.findAllActiveBySpaceId(spaceId).stream()
-                .filter(participation -> MealEligibilityEngine.isEligibleForPollAudience(
-                        participation.getMember(), participation, targetDate, mealType))
+                .filter(participation -> isPollEligible(participation, targetDate, mealType))
                 .map(participation -> EligibleParticipantResponse.builder()
                         .memberId(participation.getMember().getId())
                         .memberName(participation.getMember().getFullName())
@@ -99,6 +99,15 @@ public class MealEligibilityService {
                         .mealPlanName(participation.getMealPlan().getName())
                         .build())
                 .toList();
+    }
+
+    private boolean isPollEligible(MealParticipationEntity participation, LocalDate date, MealType mealType) {
+        if (!MealEligibilityEngine.isEligibleForPollAudience(
+                participation.getMember(), participation, date, mealType)) {
+            return false;
+        }
+        return subscriptionPolicy.canParticipateInPolls(
+                participation.getSpace(), participation.getMember());
     }
 
     private static final class PlanAccumulator {

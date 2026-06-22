@@ -2,6 +2,7 @@ package com.countin.countin_backend.meal.application.service;
 
 import com.countin.countin_backend.common.exception.BusinessException;
 import com.countin.countin_backend.meal.api.dto.request.CreateMealDeliveryLocationRequest;
+import com.countin.countin_backend.meal.api.dto.request.ReorderMealDeliveryLocationsRequest;
 import com.countin.countin_backend.meal.api.dto.request.UpdateMealDeliveryLocationRequest;
 import com.countin.countin_backend.meal.api.dto.response.MealDeliveryLocationResponse;
 import com.countin.countin_backend.meal.infrastructure.persistence.entity.MealDeliveryLocationEntity;
@@ -51,9 +52,10 @@ public class MealDeliveryLocationService {
         MealDeliveryLocationEntity entity = MealDeliveryLocationEntity.builder()
                 .space(space)
                 .name(request.getName().trim())
-                .description(request.getDescription() != null ? request.getDescription().trim() : null)
+                .description(trimToNull(request.getDescription()))
+                .address(trimToNull(request.getAddress()))
                 .active(true)
-                .sortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0)
+                .sortOrder(request.getSortOrder() != null ? request.getSortOrder() : nextSortOrder(spaceId))
                 .build();
         return MealDeliveryLocationResponse.from(locationRepository.save(entity));
     }
@@ -69,7 +71,10 @@ public class MealDeliveryLocationService {
             entity.setName(request.getName().trim());
         }
         if (request.getDescription() != null) {
-            entity.setDescription(request.getDescription().trim());
+            entity.setDescription(trimToNull(request.getDescription()));
+        }
+        if (request.getAddress() != null) {
+            entity.setAddress(trimToNull(request.getAddress()));
         }
         if (request.getActive() != null) {
             entity.setActive(request.getActive());
@@ -78,6 +83,38 @@ public class MealDeliveryLocationService {
             entity.setSortOrder(request.getSortOrder());
         }
         return MealDeliveryLocationResponse.from(locationRepository.save(entity));
+    }
+
+    @Transactional
+    public List<MealDeliveryLocationResponse> reorder(
+            UUID spaceId, UUID callerId, ReorderMealDeliveryLocationsRequest request) {
+        mealAccessService.requireManageMeals(spaceId, callerId);
+        requireMessSpace(spaceId);
+
+        List<MealDeliveryLocationEntity> existing =
+                locationRepository.findBySpaceIdOrderBySortOrderAscNameAsc(spaceId);
+        if (existing.size() != request.getLocationIdsInOrder().size()) {
+            throw new BusinessException("Reorder list must include all delivery locations", HttpStatus.BAD_REQUEST);
+        }
+
+        var existingIds = existing.stream()
+                .map(MealDeliveryLocationEntity::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        if (!existingIds.equals(new java.util.HashSet<>(request.getLocationIdsInOrder()))) {
+            throw new BusinessException("Reorder list contains invalid delivery locations", HttpStatus.BAD_REQUEST);
+        }
+
+        var byId = existing.stream()
+                .collect(java.util.stream.Collectors.toMap(MealDeliveryLocationEntity::getId, row -> row));
+        int order = 0;
+        for (UUID locationId : request.getLocationIdsInOrder()) {
+            byId.get(locationId).setSortOrder(order++);
+        }
+        locationRepository.saveAll(existing);
+
+        return locationRepository.findBySpaceIdOrderBySortOrderAscNameAsc(spaceId).stream()
+                .map(MealDeliveryLocationResponse::from)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -110,5 +147,17 @@ public class MealDeliveryLocationService {
             throw new BusinessException("Delivery locations are only available for mess spaces", HttpStatus.BAD_REQUEST);
         }
         return space;
+    }
+
+    private int nextSortOrder(UUID spaceId) {
+        return locationRepository.findMaxSortOrderBySpaceId(spaceId) + 1;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

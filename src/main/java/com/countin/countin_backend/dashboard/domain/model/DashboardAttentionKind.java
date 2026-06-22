@@ -7,7 +7,8 @@ public enum DashboardAttentionKind {
     PARTIAL_PLANNED("partial_planned"),
     READY_TO_SHARE("ready_to_share"),
     POLL_OPEN("poll_open"),
-    PAYMENTS_OVERDUE("payments_overdue");
+    PAYMENTS_OVERDUE("payments_overdue"),
+    SUBSCRIPTION_ACTIVATION_PENDING("subscription_activation_pending");
 
     private final String value;
 

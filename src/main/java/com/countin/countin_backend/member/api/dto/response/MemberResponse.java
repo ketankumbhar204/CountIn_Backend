@@ -26,6 +26,9 @@ public class MemberResponse {
     @Schema(description = "Whether this member is linked to a registered User account")
     private boolean linkedUser;
 
+    @Schema(description = "Linked app user id when linkedUser is true")
+    private UUID linkedUserId;
+
     @Schema(description = "Operational member status (distinct from soft-delete isActive)")
     private MemberStatus status;
 
@@ -47,6 +50,7 @@ public class MemberResponse {
                 .mobileNumber(member.getMobileNumber())
                 .role(member.getRole())
                 .linkedUser(member.getUser() != null)
+                .linkedUserId(member.getUser() != null ? member.getUser().getId() : null)
                 .membershipId(member.getMembership() != null ? member.getMembership().getId() : null)
                 .status(member.getStatus())
                 .occupancyStatus(member.getOccupancyStatus())

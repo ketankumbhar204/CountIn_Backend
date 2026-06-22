@@ -16,5 +16,8 @@ public class CreateMealDeliveryLocationRequest {
     @Size(max = 500)
     private String description;
 
+    @Size(max = 500)
+    private String address;
+
     private Integer sortOrder;
 }

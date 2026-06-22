@@ -1,6 +1,8 @@
 package com.countin.countin_backend.space.api.dto.response;
 
 import com.countin.countin_backend.space.domain.model.Space;
+import com.countin.countin_backend.space.domain.model.MealBillingType;
+import com.countin.countin_backend.space.domain.model.PrepaidBalanceUnit;
 import com.countin.countin_backend.space.domain.model.SpaceType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.math.BigDecimal;
@@ -32,6 +34,15 @@ public class SpaceDetailsResponse {
     @Schema(description = "Default monthly food charge prefill when food is billed separately")
     private BigDecimal defaultFoodCharge;
 
+    @Schema(description = "Meal billing mode for Mess / meal participation")
+    private MealBillingType mealBillingType;
+
+    @Schema(description = "Prepaid balance unit when mealBillingType is PREPAID_BALANCE")
+    private PrepaidBalanceUnit prepaidBalanceUnit;
+
+    @Schema(description = "When prepaid balance is exhausted, bill pay-per-meal automatically")
+    private boolean prepaidFallbackToPayPerMeal;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -45,6 +56,9 @@ public class SpaceDetailsResponse {
                 .ownerId(space.getOwnerId())
                 .foodIncludedInRent(space.isFoodIncludedInRent())
                 .defaultFoodCharge(space.getDefaultFoodCharge())
+                .mealBillingType(space.getMealBillingType())
+                .prepaidBalanceUnit(space.getPrepaidBalanceUnit())
+                .prepaidFallbackToPayPerMeal(space.isPrepaidFallbackToPayPerMeal())
                 .createdAt(space.getCreatedAt())
                 .updatedAt(space.getUpdatedAt())
                 .build();

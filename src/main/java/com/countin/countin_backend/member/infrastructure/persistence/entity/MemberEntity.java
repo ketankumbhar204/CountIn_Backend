@@ -6,6 +6,7 @@ import com.countin.countin_backend.member.domain.model.MemberGender;
 import com.countin.countin_backend.member.domain.model.MemberStatus;
 import com.countin.countin_backend.member.domain.model.MembershipRole;
 import com.countin.countin_backend.occupancy.domain.model.MemberOccupancyStatus;
+import com.countin.countin_backend.space.domain.model.MealBillingType;
 import com.countin.countin_backend.space.infrastructure.persistence.entity.SpaceEntity;
 import com.countin.countin_backend.user.infrastructure.persistence.entity.UserEntity;
 import jakarta.persistence.Column;
@@ -107,4 +108,8 @@ public class MemberEntity extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "member_category", length = 30)
     private MemberCategory memberCategory;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "meal_billing_type", length = 20)
+    private MealBillingType mealBillingType;
 }

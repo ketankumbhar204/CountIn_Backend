@@ -3,6 +3,7 @@ package com.countin.countin_backend.meal.api.controller;
 import com.countin.countin_backend.common.security.SecurityUtils;
 import com.countin.countin_backend.common.web.ApiResponse;
 import com.countin.countin_backend.meal.api.dto.request.CreateMealDeliveryLocationRequest;
+import com.countin.countin_backend.meal.api.dto.request.ReorderMealDeliveryLocationsRequest;
 import com.countin.countin_backend.meal.api.dto.request.UpdateMealDeliveryLocationRequest;
 import com.countin.countin_backend.meal.api.dto.response.MealDeliveryLocationResponse;
 import com.countin.countin_backend.meal.application.service.MealDeliveryLocationService;
@@ -55,6 +56,15 @@ public class MealDeliveryLocationController {
                 .body(ApiResponse.success(
                         "Delivery location created successfully",
                         deliveryLocationService.create(spaceId, callerId, request)));
+    }
+
+    @PostMapping("/reorder")
+    public ResponseEntity<ApiResponse<List<MealDeliveryLocationResponse>>> reorder(
+            @PathVariable UUID spaceId, @RequestBody @Valid ReorderMealDeliveryLocationsRequest request) {
+        UUID callerId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success(
+                "Delivery locations reordered successfully",
+                deliveryLocationService.reorder(spaceId, callerId, request)));
     }
 
     @PutMapping("/{locationId}")
